@@ -1,0 +1,22 @@
+{
+  "name": "your-plugin-name",
+  "version": "1.0.0",
+  "description": "A description of your amazing plugin.",
+  "main": "src/main.ts",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs --production"
+  },
+  "keywords": [
+    "obsidian-md",
+    "obsidian-plugin"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^18.19.34",
+    "esbuild": "^0.21.4",
+    "obsidian": "latest",
+    "typescript": "^5.4.5"
+  }
+}
