@@ -6,7 +6,7 @@
 
 ## The "Why" - A Rant from the Author
 
-I'll be honest. I love making plugins for Obsidian. It's fun, it's rewarding, and it lets me tailor my favorite app to my exact needs. But you know what I *don't* love? The ceremony.
+Let's be honest. I love making plugins for Obsidian. It's fun, it's rewarding, and it lets me tailor my favorite app to my exact needs. But you know what I *don't* love? The ceremony.
 
 Every time I wanted to tweak a tiny bit of TypeScript, I had to:
 1.  Open my code editor.
@@ -53,7 +53,7 @@ Ready to dive in? Here's the workflow.
 
 ### Installation
 For now, you'll have to install it manually.
-1.  Download the `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Yuichi-Aragi/IAB/releases).
+1.  Download the `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/your-repo/your-plugin/releases).
 2.  Create a new folder named `in-app-builder` inside your vault's `.obsidian/plugins/` directory.
 3.  Copy the downloaded files into that new folder.
 4.  Go to `Settings` -> `Community Plugins`, and enable "In-App Builder".
@@ -98,5 +98,23 @@ This is just the beginning. Here's what I'm hoping to add when I'm not feeling l
 *   **Better `node_modules` Support:** A more robust system for handling in-vault `node_modules` folders.
 *   **A Dedicated "Builder" View:** Instead of just a settings tab, maybe a proper sidebar pane for managing and building projects.
 *   **Bug Fixes:** So. Many. Bug. Fixes.
+
+## 💡 Important Notes & Tips
+
+### 🌐 Internet Connection
+This plugin needs an internet connection *every* time you run it after loading Obsidian. It has to download the `esbuild` library from a CDN, which is about **15 MB** approximately.
+
+You'll know it's done when you see a success notice or the status in the settings tab says "Initialized ✓". After that, you can safely turn off your internet if you want... and hope it works, I guess.
+
+### 📱 Mobile Development & Debugging
+Developing on mobile is tough without access to the developer console. If you're trying to debug your plugin on a phone or tablet, you're going to need a way to see `console.log` messages and errors.
+
+I recommend using a plugin like **ScriptPilot** to inject the `eruda` mobile console into Obsidian. You can find it here:
+
+[https://github.com/Yuichi-Aragi/ScriptPilot](https://github.com/Yuichi-Aragi/ScriptPilot)
+
+You can even use this builder plugin to build ScriptPilot itself if you're feeling meta!
+
+---
 
 Enjoy the builder. I hope it saves you from some of the frustration it saved me from. Happy coding
