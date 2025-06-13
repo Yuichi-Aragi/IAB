@@ -1,10 +1,10 @@
 {
-	"id": "your-plugin-id",
-	"name": "Your Plugin Name",
-	"version": "1.0.0",
-	"minAppVersion": "1.5.0",
-	"description": "A description of your amazing plugin.",
-	"author": "Your Name",
-	"authorUrl": "https://your-website.com",
+	"id": "in-app-builder",
+	"name": "In-App Builder",
+	"version": "1.0.0-beta",
+	"minAppVersion": "1.0.0",
+	"description": "Build and bundle your Obsidian plugins right inside Obsidian, no external tools needed!",
+	"author": "Yuichi-Aragi",
+	"authorUrl": "https://github.com/Yuichi-Aragi/IAB/",
 	"isDesktopOnly": false
 }
