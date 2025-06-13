@@ -1,0 +1,163 @@
+name: Build and Release Plugin
+
+on:
+  push:
+    tags:
+      - '*' # This workflow runs on any tag push
+
+# Grant permissions for the workflow to create releases and commit files
+permissions:
+  contents: write
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # Fetch all history for all branches and tags
+        with:
+          fetch-depth: 0
+
+      # 2. Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use a current LTS version
+          cache: 'npm'
+
+      # 3. Handle package-lock.json and install dependencies
+      - name: Check for package-lock.json
+        id: check_lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "lockfile_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "lockfile_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies with npm ci (if lockfile exists)
+        if: steps.check_lockfile.outputs.lockfile_exists == 'true'
+        id: npm_ci
+        continue-on-error: true # Continue if npm ci fails
+        run: npm ci
+
+      - name: Install dependencies with npm install (if lockfile is missing or ci failed)
+        if: steps.check_lockfile.outputs.lockfile_exists == 'false' || steps.npm_ci.outcome == 'failure'
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "Corrupted package-lock.json detected. Removing and regenerating."
+            rm package-lock.json
+          fi
+          npm install
+
+      # 4. Commit the new package-lock.json if it was created or modified
+      - name: Check for changes in package-lock.json
+        id: lockfile_status
+        run: |
+          if [[ -n $(git status --porcelain package-lock.json) ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push package-lock.json
+        if: steps.lockfile_status.outputs.changed == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m "chore: update package-lock.json"
+          git push
+
+      # 5. Build the plugin for production
+      - name: Build plugin
+        id: build
+        run: npm run build
+
+      # 6. Prepare release assets
+      - name: Prepare release assets
+        id: prepare_assets
+        run: |
+          # Create a directory for the release assets
+          mkdir release-assets
+
+          # Copy the essential files
+          cp build/main.js release-assets/
+          cp manifest.json release-assets/
+
+          # Conditionally copy styles.css if it exists after the build
+          if [ -f build/styles.css ]; then
+            cp build/styles.css release-assets/
+            echo "styles.css was packaged."
+          else
+            echo "No styles.css file found to package. Continuing."
+          fi
+
+      # 7. Get version and tag info for the release
+      - name: Get release info
+        id: get_info
+        run: |
+          # Extract tag name from the Git ref
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
+
+          # Extract version from manifest.json
+          VERSION=$(jq -r .version manifest.json)
+          echo "version=$VERSION" >> $GITHUB_ENV
+
+      # 8. Verify that the tag matches the manifest version
+      - name: Verify tag and manifest version match
+        run: |
+          # The 'v' prefix in the tag is optional
+          if [ "v${{ env.version }}" != "${{ env.tag_name }}" ] && [ "${{ env.version }}" != "${{ env.tag_name }}" ]; then
+            echo "Error: Tag name '${{ env.tag_name }}' does not match manifest version '${{ env.version }}'."
+            exit 1
+          fi
+
+      # 9. Overwrite existing release if one with the same tag exists
+      - name: Delete existing release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: process.env.tag_name
+              });
+              if (release) {
+                console.log(`Found existing release ${release.id} for tag ${process.env.tag_name}. Deleting it.`);
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.id
+                });
+              }
+            } catch (error) {
+              if (error.status === 404) {
+                console.log(`No existing release found for tag ${process.env.tag_name}. Proceeding to create a new one.`);
+              } else {
+                console.error('An error occurred while trying to find an existing release:');
+                throw error;
+              }
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.tag_name }}
+
+      # 10. Create the new GitHub Release
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.tag_name }}
+          release_name: Release ${{ env.tag_name }}
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/main.js
+            release-assets/manifest.json
+            release-assets/styles.css
