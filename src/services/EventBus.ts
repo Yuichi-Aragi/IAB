@@ -46,7 +46,12 @@ type TypedListener<T extends AppEvent> = (payload: T['payload']) => void;
 export class EventBus {
     private state: EventBusState = 'idle';
     private listeners: Map<AppEvent['type'], Set<AnyListener>> = new Map();
-    private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
+    private readonly logger: Logger;
+
+    constructor() {
+        // Cache the logger instance to prevent resolution errors during unload.
+        this.logger = container.resolve<Logger>(ServiceTokens.Logger);
+    }
 
     /**
      * Subscribes a callback to a specific event type. This method provides a raw subscription

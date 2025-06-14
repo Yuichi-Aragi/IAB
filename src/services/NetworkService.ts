@@ -45,7 +45,7 @@ interface QueuedRequest {
  */
 export class NetworkService {
     private app: App;
-    private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
+    private readonly logger: Logger;
 
     private state: NetworkServiceState = 'running';
     private readonly requestQueue: QueuedRequest[] = [];
@@ -60,6 +60,8 @@ export class NetworkService {
 
     constructor(app: App) {
         this.app = app;
+        // Cache the logger instance to prevent resolution errors during unload.
+        this.logger = container.resolve<Logger>(ServiceTokens.Logger);
         this.logger.log('verbose', 'NetworkService initialized and is in a "running" state.');
     }
 

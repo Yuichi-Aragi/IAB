@@ -33,7 +33,12 @@ type CommandBusState = 'idle' | 'dispatching' | 'unloading' | 'unloaded';
 export class CommandBus {
     private state: CommandBusState = 'idle';
     private handlers = new Map<string, ICommandHandler<any>>();
-    private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
+    private readonly logger: Logger;
+
+    constructor() {
+        // Cache the logger instance to prevent resolution errors during unload.
+        this.logger = container.resolve<Logger>(ServiceTokens.Logger);
+    }
 
     /**
      * Registers a command handler with the bus. Each handler is responsible for the logic

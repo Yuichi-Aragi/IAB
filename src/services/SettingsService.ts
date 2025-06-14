@@ -6,7 +6,6 @@ import {
     DEFAULT_GLOBAL_LOG_LEVEL,
     DEFAULT_PROJECT_BUILD_OPTIONS,
     DEFAULT_PROJECT_LOG_LEVEL,
-    DEFAULT_ENABLE_CACHE
 } from '../constants';
 import { Logger } from '../utils/Logger';
 import { isProjectSettingsValid, getValidationIssuesSummary } from '../utils/ValidationUtils';
@@ -173,7 +172,6 @@ export class SettingsService {
         return JSON.parse(JSON.stringify({
             projects: [],
             globalLogLevel: DEFAULT_GLOBAL_LOG_LEVEL,
-            enableCache: DEFAULT_ENABLE_CACHE,
             esbuildJsCdnUrl: DEFAULT_ESBUILD_JS_CDN_URL,
             esbuildWasmCdnUrl: DEFAULT_ESBUILD_WASM_CDN_URL,
         }));
@@ -192,7 +190,6 @@ export class SettingsService {
         return {
             ...defaults,
             globalLogLevel: loadedData.globalLogLevel ?? defaults.globalLogLevel,
-            enableCache: loadedData.enableCache ?? defaults.enableCache,
             esbuildJsCdnUrl: loadedData.esbuildJsCdnUrl ?? defaults.esbuildJsCdnUrl,
             esbuildWasmCdnUrl: loadedData.esbuildWasmCdnUrl ?? defaults.esbuildWasmCdnUrl,
             projects: loadedData.projects ?? [], // Project validation is handled separately

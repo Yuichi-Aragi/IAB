@@ -40,7 +40,7 @@ interface QueuedOperation<T> {
 export class FileService {
     private app: App;
     private vault: Vault;
-    private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
+    private readonly logger: Logger;
 
     private state: FileServiceState = 'idle';
     private readonly operationQueue: QueuedOperation<any>[] = [];
@@ -49,6 +49,8 @@ export class FileService {
     constructor(app: App) {
         this.app = app;
         this.vault = app.vault;
+        // Cache the logger instance to prevent resolution errors during unload.
+        this.logger = container.resolve<Logger>(ServiceTokens.Logger);
         this.logger.log('verbose', 'FileService initialized.');
     }
 
@@ -161,7 +163,8 @@ export class FileService {
     }
 
     /**
-     * Checks if a file or folder exists at the given path.
+     * Checks if a file or folder exists at the given path. This method is enhanced to
+     * be reliable for dotfiles by falling back to a direct adapter check.
      * This is a read operation and does not use the write queue.
      * @param {string} path The vault-relative path to check.
      * @returns {Promise<boolean>} A promise that resolves to `true` if the path exists, `false` otherwise.
@@ -177,12 +180,24 @@ export class FileService {
             if (normalizedPath === '' || normalizedPath === '.' || normalizedPath === '/') {
                 return true; // Vault root always exists.
             }
+
+            // --- Primary Method: Fast, cached check via Obsidian's metadata ---
             const abstractFile = this.vault.getAbstractFileByPath(normalizedPath);
-            const exists = !!abstractFile;
-            this.logger.log('verbose', `Existence check for '${normalizedPath}': ${exists}`);
-            return exists;
+            if (abstractFile) {
+                this.logger.log('verbose', `Existence check for '${normalizedPath}' (via getAbstractFileByPath): true`);
+                return true;
+            }
+
+            // --- Fallback Method: Direct adapter check for uncached/dotfiles ---
+            // This is crucial for dotfiles which might not be in the vault's metadata cache,
+            // especially right after they have been created.
+            this.logger.log('verbose', `Existence check for '${normalizedPath}' (via getAbstractFileByPath) failed. Trying adapter.exists().`);
+            const adapterExists = await this.vault.adapter.exists(normalizedPath);
+            this.logger.log('verbose', `Existence check for '${normalizedPath}' (via adapter.exists()): ${adapterExists}`);
+            return adapterExists;
+
         } catch (error: unknown) {
-            this.logger.log('warn', `Error checking existence of ${normalizedPath}, assuming non-existent for safety:`, error);
+            this.logger.log('warn', `Error during existence check for '${normalizedPath}', assuming non-existent for safety:`, error);
             return false;
         }
     }
