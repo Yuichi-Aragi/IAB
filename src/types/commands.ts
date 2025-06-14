@@ -79,12 +79,6 @@ export type SaveSettingsCommand = {
     };
 };
 
-/** A command to clear the esbuild asset cache from the vault. */
-export type ClearCacheCommand = {
-    readonly type: 'CLEAR_CACHE';
-    readonly payload: {}; // No payload needed for this command.
-};
-
 
 /**
  * A discriminated union of all possible commands that can be dispatched through the CommandBus.
@@ -97,8 +91,7 @@ export type Command =
     | RemoveProjectCommand
     | ReinitializeEsbuildCommand
     | CopyDiagnosticsCommand
-    | SaveSettingsCommand
-    | ClearCacheCommand;
+    | SaveSettingsCommand;
 
 /**
  * Defines the contract for a command handler. Each handler is a self-contained unit of business

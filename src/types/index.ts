@@ -192,10 +192,6 @@ export interface PluginSettings {
      */
     readonly globalLogLevel: LogLevel;
     /**
-     * If true, esbuild assets will be cached in the vault to speed up initialization and enable offline use.
-     */
-    readonly enableCache: boolean;
-    /**
      * The CDN URL for the main esbuild JavaScript file (e.g., `browser.min.js`).
      * Users can override the default.
      */
