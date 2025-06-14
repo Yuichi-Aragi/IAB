@@ -266,23 +266,10 @@ export class ProjectManager {
         }
 
         const cancelToken = new AbortController();
-        const operationEntry: Operation<T> = {
-            execute: operation.execute,
-            cancelToken,
-            cleanup: () => {
-                cancelToken.abort();
-                this.resourceRegistry.unregister(operationEntry);
-            }
-        };
-
-        this.resourceRegistry.register(
-            operationEntry, 
-            `Operation:${operation.name}:${Date.now()}`
-        );
 
         return new Promise<T>((resolve, reject) => {
-            this.operationQueue.push({
-                ...operationEntry,
+            // Create the object without the cleanup function first.
+            const queuedOperation: Operation<T> = {
                 execute: async () => {
                     try {
                         const result = await operation.execute();
@@ -292,8 +279,23 @@ export class ProjectManager {
                         reject(error);
                         throw error;
                     }
-                }
-            });
+                },
+                cancelToken,
+                // cleanup will be added next
+            };
+
+            // Now, assign the cleanup function which can safely close over `queuedOperation`.
+            queuedOperation.cleanup = () => {
+                cancelToken.abort();
+                this.resourceRegistry.unregister(queuedOperation);
+            };
+
+            this.resourceRegistry.register(
+                queuedOperation,
+                `Operation:${operation.name}:${Date.now()}`
+            );
+
+            this.operationQueue.push(queuedOperation);
 
             this._processQueue().catch(reject);
         });

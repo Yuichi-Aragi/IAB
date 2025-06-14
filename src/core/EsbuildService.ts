@@ -17,7 +17,6 @@ import { InAppBuilderPlugin } from './InAppBuilderPlugin';
 
 // --- New Decomposed Component Imports ---
 import { EsbuildAssetManager } from './esbuild/EsbuildAssetManager';
-import { EsbuildCacheManager } from './esbuild/EsbuildCacheManager';
 import { EsbuildCdnFetcher } from './esbuild/EsbuildCdnFetcher';
 import { EsbuildInitializer } from './esbuild/EsbuildInitializer';
 
@@ -28,12 +27,11 @@ interface ExtendedPendingInitializeCallback extends PendingInitializeCallback {
 export class EsbuildService {
     private app: App;
     private plugin: InAppBuilderPlugin;
-    private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
+    private readonly logger: Logger;
+    private readonly eventBus: EventBus;
     private get settingsService(): SettingsService { return container.resolve<SettingsService>(ServiceTokens.SettingsService); }
-    private get eventBus(): EventBus { return container.resolve<EventBus>(ServiceTokens.EventBus); }
 
     // --- Decomposed Components ---
-    private cacheManager: EsbuildCacheManager;
     private assetManager: EsbuildAssetManager;
     private initializer: EsbuildInitializer;
 
@@ -52,17 +50,16 @@ export class EsbuildService {
         this.app = app;
         this.plugin = plugin;
 
+        // Cache service instances to prevent resolution errors during unload.
+        this.logger = container.resolve<Logger>(ServiceTokens.Logger);
+        this.eventBus = container.resolve<EventBus>(ServiceTokens.EventBus);
+
         // Instantiate the new components, passing their dependencies from the DI container.
-        this.cacheManager = new EsbuildCacheManager(
-            container.resolve(ServiceTokens.FileService),
-            this.logger
-        );
         const cdnFetcher = new EsbuildCdnFetcher(
             container.resolve(ServiceTokens.NetworkService),
             this.logger
         );
         this.assetManager = new EsbuildAssetManager(
-            this.cacheManager,
             cdnFetcher,
             this.logger
         );
@@ -85,21 +82,6 @@ export class EsbuildService {
 
     public getLastInitializationError(): EsbuildInitializationError | null {
         return this.lastInitializationError;
-    }
-
-    public async clearCacheAndReinitialize(initiatorId: string = 'CacheClear'): Promise<void> {
-        this.logger.log('info', `Clearing esbuild asset cache triggered by: ${initiatorId}.`);
-        try {
-            await this.cacheManager.clearCache();
-            new Notice(`Cache directory "${this.cacheManager.getCacheDir()}" moved to trash.`);
-        } catch (e: unknown) {
-            const errorMessage = `Failed to delete cache directory "${this.cacheManager.getCacheDir()}".`;
-            this.logger.log('error', errorMessage, e);
-            new Notice(`Error clearing cache. Check console for details.`, 7000);
-        }
-        
-        this.unload();
-        await this.initializeEsbuild(initiatorId, true);
     }
 
     public initializeEsbuild(initiatorId: string = 'Unknown', showNotices: boolean = false): Promise<void> {

@@ -32,7 +32,6 @@ import { RemoveProjectHandler } from './commands/RemoveProjectHandler';
 import { ReinitializeEsbuildHandler } from './commands/ReinitializeEsbuildHandler';
 import { CopyDiagnosticsHandler } from './commands/CopyDiagnosticsHandler';
 import { SaveSettingsHandler } from './commands/SaveSettingsHandler';
-import { ClearCacheHandler } from './commands/ClearCacheHandler';
 
 type PluginState = 'unloaded' | 'loading' | 'loaded' | 'unloading' | 'failed';
 
@@ -181,7 +180,6 @@ export class InAppBuilderPlugin extends Plugin {
         commandBus.register(new ReinitializeEsbuildHandler());
         commandBus.register(new CopyDiagnosticsHandler());
         commandBus.register(new SaveSettingsHandler());
-        commandBus.register(new ClearCacheHandler());
     }
 
     /**
