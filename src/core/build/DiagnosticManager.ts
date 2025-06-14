@@ -31,7 +31,6 @@ export class DiagnosticManager {
             projectSettings: JSON.parse(JSON.stringify(project)),
             globalSettings: {
                 globalLogLevel: globalSettings.globalLogLevel,
-                enableCache: globalSettings.enableCache,
                 esbuildJsCdnUrl: globalSettings.esbuildJsCdnUrl,
                 esbuildWasmCdnUrl: globalSettings.esbuildWasmCdnUrl,
             },

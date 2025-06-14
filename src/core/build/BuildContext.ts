@@ -24,7 +24,6 @@ export interface BuildDiagnostics {
     projectSettings: ProjectSettings;
     globalSettings: {
         globalLogLevel: LogLevel;
-        enableCache: boolean;
         esbuildJsCdnUrl: string;
         esbuildWasmCdnUrl: string;
     };
