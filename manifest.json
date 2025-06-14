@@ -1,9 +1,9 @@
 {
 	"id": "in-app-builder",
 	"name": "In-App Builder",
-	"version": "1.0.0-beta",
+	"version": "1.0.0",
 	"minAppVersion": "1.7.0",
-	"description": "Build and bundle your Obsidian plugins right inside Obsidian, no external tools needed!",
+	"description": "Build and bundle your plugins right inside vault, no external tools needed!",
 	"author": "Yuichi-Aragi",
 	"authorUrl": "https://github.com/Yuichi-Aragi/IAB/",
 	"isDesktopOnly": false
