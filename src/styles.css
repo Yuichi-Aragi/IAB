@@ -1,0 +1,89 @@
+/* styles.css */
+
+/* --- CRITICAL: Fix for Vertical Text Bug in Settings --- */
+.in-app-builder-settings-tab .setting-item,
+.in-app-builder-project-modal .setting-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.in-app-builder-settings-tab .setting-item-info,
+.in-app-builder-project-modal .setting-item-info {
+    flex: 1;
+    min-width: 0; /* This prevents the flex item from causing overflow, fixing the vertical text bug. */
+}
+.in-app-builder-settings-tab .setting-item-control,
+.in-app-builder-project-modal .setting-item-control {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+    margin-left: auto;
+}
+
+/* --- General Section Styling --- */
+.in-app-builder-settings-section {
+    margin-bottom: 20px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+}
+.in-app-builder-settings-section > .setting-item.is-heading {
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.in-app-builder-settings-section .setting-item {
+    padding: 15px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+.in-app-builder-settings-section .setting-item:last-child {
+    border-bottom: none;
+}
+.in-app-builder-settings-section .setting-item-description {
+    padding: 0 15px 10px;
+    margin-top: -5px;
+}
+
+/* --- Project List Styling --- */
+.project-item .setting-item-control { width: 100%; }
+.project-item-container { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.project-item-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; }
+.project-item-name { font-weight: var(--font-bold); font-size: var(--font-ui-large); }
+.project-item-details { font-size: var(--font-ui-small); color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; }
+.project-item-detail { display: inline-flex; align-items: center; gap: 4px; }
+.project-item-detail .icon { font-family: var(--font-monospace); }
+.project-item-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
+/* --- Esbuild Status Section --- */
+.esbuild-status-setting .setting-item-control { display: flex; justify-content: flex-end; align-items: center; }
+.in-app-builder-status-text { margin-right: 10px; font-weight: var(--font-bold); }
+.status-ok { color: var(--text-success); }
+.status-error { color: var(--text-error); }
+.status-progress { color: var(--text-accent); }
+.status-progress .loader { display: inline-block; margin-left: 5px; }
+
+/* --- Modal Styling --- */
+.in-app-builder-project-modal .modal-content { padding-top: 0; }
+.in-app-builder-project-modal details { border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); margin-bottom: 15px; padding: 0; }
+.in-app-builder-project-modal details[open] { padding-bottom: 10px; }
+.in-app-builder-project-modal summary { padding: 10px 15px; font-weight: var(--font-bold); cursor: pointer; list-style-position: inside; }
+.in-app-builder-project-modal details > .setting-item { padding: 10px 15px; border-top: 1px solid var(--background-modifier-border-hover); }
+.in-app-builder-project-modal details > .setting-item:first-of-type { border-top: none; }
+.in-app-builder-project-modal .setting-item-control { max-width: 60%; }
+.in-app-builder-project-modal .setting-item-control-wrapper { display: flex; flex-direction: column; width: 100%; }
+.in-app-builder-project-modal .setting-item-feedback { font-size: var(--font-ui-smaller); color: var(--text-muted); margin-top: 4px; min-height: 1.2em; }
+.in-app-builder-project-modal .setting-item-feedback-valid { color: var(--text-success); }
+.in-app-builder-project-modal .setting-item-feedback-error { color: var(--text-error); }
+.in-app-builder-project-modal .in-app-builder-input-error { border-color: var(--text-error) !important; }
+.in-app-builder-project-modal textarea { width: 100%; min-height: 80px; font-family: var(--font-monospace); }
+.in-app-builder-project-modal .in-app-builder-dependency-controls { display: flex; align-items: center; gap: 10px; width: 100%; }
+.in-app-builder-project-modal .in-app-builder-dependency-inputs { display: flex; flex-direction: column; gap: 5px; flex-grow: 1; }
+.in-app-builder-project-modal .modal-button-container { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.in-app-builder-diagnostic-textarea { width: 100%; font-family: var(--font-monospace); white-space: pre; word-wrap: break-word; }
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 600px) {
+    .project-item-header { flex-direction: column; align-items: stretch; }
+    .project-item-actions { justify-content: flex-end; }
+    .in-app-builder-project-modal .setting-item { flex-direction: column; align-items: stretch; gap: 5px; }
+    .in-app-builder-project-modal .setting-item-control { max-width: 100%; margin-left: 0; }
+    .in-app-builder-project-modal .in-app-builder-dependency-controls { flex-wrap: wrap; }
+}
