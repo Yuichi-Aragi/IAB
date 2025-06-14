@@ -124,20 +124,16 @@ export class CopyDiagnosticsHandler implements ICommandHandler<CopyDiagnosticsCo
             this.logger.log('warn', `Diagnostic Info for "${projectName}" was too large for the modal and was truncated. Full content follows:\n${diagnosticInfo}`);
         }
 
-        new Modal(this.app)
-            .setTitle(`Diagnostic Info: ${projectName}`)
-            .setContent(el => {
-                el.createEl('p', { text: modalMessage });
-                el.createEl('textarea', {
-                    text: contentForModal,
-                    attr: {
-                        rows: 15,
-                        style: "width: 100%; font-family: monospace; white-space: pre; word-wrap: break-word;",
-                        readonly: true
-                    }
-                });
-            })
-            .open();
+        const modal = new Modal(this.app);
+        modal.titleEl.setText(`Diagnostic info: ${projectName}`);
+        modal.contentEl.createEl('p', { text: modalMessage });
+        const textarea = modal.contentEl.createEl('textarea', {
+            text: contentForModal,
+            cls: 'in-app-builder-diagnostic-textarea',
+        });
+        textarea.rows = 15;
+        textarea.readOnly = true;
+        modal.open();
     }
 
     /**
