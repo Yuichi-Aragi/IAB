@@ -11,10 +11,10 @@ export class GlobalSettingsSection extends SettingSection {
 
     public render(containerEl: HTMLElement): void {
         const globalSection = containerEl.createDiv({ cls: 'in-app-builder-settings-section' });
-        globalSection.createEl('h3', { text: 'Global Configuration' });
+        new Setting(globalSection).setName('Global configuration').setHeading();
 
         new Setting(globalSection)
-            .setName('Global Log Level')
+            .setName('Global log level')
             .addDropdown(dd => {
                 this.globalLogLevelDropdown = dd;
                 dd.addOption('error', 'Error')

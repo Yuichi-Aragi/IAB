@@ -13,8 +13,10 @@ export class EsbuildStatusSection extends SettingSection {
 
     public render(containerEl: HTMLElement): void {
         const esbuildStatusSection = containerEl.createDiv({ cls: 'in-app-builder-settings-section' });
-        esbuildStatusSection.createEl('h3', { text: 'esbuild Service Status' });
-        const statusSetting = new Setting(esbuildStatusSection).setName('Current Status');
+        new Setting(esbuildStatusSection).setName('esbuild service status').setHeading();
+        const statusSetting = new Setting(esbuildStatusSection).setName('Current status');
+        statusSetting.settingEl.addClass('esbuild-status-setting');
+        
         this.esbuildStatusEl = statusSetting.controlEl.createSpan({ cls: 'in-app-builder-status-text' });
 
         this.reinitializeEsbuildBtn = new ButtonComponent(statusSetting.controlEl)
@@ -63,7 +65,7 @@ export class EsbuildStatusSection extends SettingSection {
                 statusClass = 'status-error';
                 break;
             case 'uninitialized':
-                statusText = 'Not Initialized';
+                statusText = 'Not initialized';
                 break;
         }
 

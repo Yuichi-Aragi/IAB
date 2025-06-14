@@ -22,10 +22,10 @@ export class ProjectsSection extends SettingSection {
 
     public render(containerEl: HTMLElement): void {
         const projectsSection = containerEl.createDiv({ cls: 'in-app-builder-settings-section' });
-        projectsSection.createEl('h3', { text: 'Projects' });
+        new Setting(projectsSection).setName('Projects').setHeading();
         new Setting(projectsSection)
             .addButton(button => button
-                .setButtonText('Add New Project')
+                .setButtonText('Add new project')
                 .onClick(() => this._openProjectModal(null)));
 
         this.projectsContainerEl = projectsSection.createDiv();
@@ -87,7 +87,7 @@ export class ProjectsSection extends SettingSection {
 
         const placeholder = this.projectsContainerEl.querySelector('.empty-state');
         if (projects.length === 0 && !placeholder) {
-            this.projectsContainerEl.createEl('p', { text: 'No projects configured. Click "Add New Project" to start.', cls: 'empty-state' });
+            this.projectsContainerEl.createEl('p', { text: 'No projects configured. Click "Add new project" to start.', cls: 'empty-state' });
         } else if (projects.length > 0 && placeholder) {
             placeholder.remove();
         }
@@ -96,37 +96,79 @@ export class ProjectsSection extends SettingSection {
     private _updateProjectItem(project: ProjectSettings): void {
         const controls = this.projectUiControls.get(project.id);
         if (!controls) return;
+
+        const nameEl = controls.setting.settingEl.querySelector('.project-item-name');
+        if (nameEl) nameEl.textContent = project.name || '(Unnamed Project)';
+
+        const detailsEl = controls.setting.settingEl.querySelector('.project-item-details');
+        if (detailsEl) {
+            detailsEl.empty();
+            this._updateProjectDetails(detailsEl as HTMLElement, project);
+        }
+    }
+
+    private _updateProjectDetails(detailsEl: HTMLElement, project: ProjectSettings): void {
+        const createDetail = (icon: string, text: string) => {
+            const el = detailsEl.createSpan({ cls: 'project-item-detail' });
+            el.createSpan({ text: icon, cls: 'icon' });
+            el.createSpan({ text });
+        };
+
         const path = VaultPathResolver.normalize(project.path);
         const entry = VaultPathResolver.normalize(project.entryPoint);
         const output = VaultPathResolver.normalize(project.outputFile);
-        controls.setting.setName(project.name || '(Unnamed Project)').setDesc(`Path: ${path} | Entry: ${entry} | Output: ${output}`);
+
+        createDetail('📁', `Path: ${path}`);
+        createDetail('→', `Entry: ${entry}`);
+        createDetail('←', `Output: ${output}`);
     }
 
     private _renderProjectItem(project: ProjectSettings): void {
         if (!this.projectsContainerEl) return;
-        const controls = { setting: new Setting(this.projectsContainerEl), buildBtn: new ButtonComponent(createDiv()) };
-        this._updateProjectItem(project);
-        const settingEl = controls.setting.settingEl;
-        settingEl.addClass('project-item');
-        const actionsDiv = settingEl.createDiv({ cls: 'project-actions' });
 
-        controls.buildBtn = new ButtonComponent(actionsDiv).setIcon('play').setTooltip(`Build ${project.name}`)
+        const setting = new Setting(this.projectsContainerEl);
+        setting.settingEl.addClass('project-item');
+        setting.infoEl.remove();
+        setting.controlEl.style.width = '100%';
+
+        const container = setting.controlEl.createDiv({ cls: 'project-item-container' });
+        const header = container.createDiv({ cls: 'project-item-header' });
+        
+        const infoDiv = header.createDiv();
+        infoDiv.createEl('div', { text: project.name || '(Unnamed Project)', cls: 'project-item-name' });
+
+        const detailsDiv = infoDiv.createDiv({ cls: 'project-item-details' });
+        this._updateProjectDetails(detailsDiv, project);
+
+        const actionsDiv = header.createDiv({ cls: 'project-item-actions' });
+        const buildBtn = new ButtonComponent(actionsDiv)
+            .setIcon('play')
+            .setTooltip(`Build ${project.name}`)
             .onClick(() => this._safeCommandDispatch('BUILD_PROJECT', { projectId: project.id, initiator: 'settings-tab' }));
-        new ButtonComponent(actionsDiv).setIcon('clipboard-copy').setTooltip('Copy diagnostic info')
+
+        new ButtonComponent(actionsDiv)
+            .setIcon('clipboard-copy')
+            .setTooltip('Copy last build diagnostic info')
             .onClick(() => this._safeCommandDispatch('COPY_DIAGNOSTICS', { projectId: project.id }));
-        new ButtonComponent(actionsDiv).setIcon('pencil').setTooltip('Edit project')
+
+        new ButtonComponent(actionsDiv)
+            .setIcon('pencil')
+            .setTooltip('Edit project')
             .onClick(() => this._openProjectModal(project));
-        new ButtonComponent(actionsDiv).setIcon('trash').setTooltip('Delete project')
+
+        new ButtonComponent(actionsDiv)
+            .setIcon('trash')
+            .setTooltip('Delete project')
             .onClick(() => this._confirmProjectDeletion(project));
 
-        this.projectUiControls.set(project.id, controls);
+        this.projectUiControls.set(project.id, { setting, buildBtn });
     }
 
     private _openProjectModal(project: ProjectSettings | null): void {
         new ProjectModal(this.app, project, async (settings: NewProjectSettings | ProjectSettings) => {
             try {
                 const commandType = project ? 'UPDATE_PROJECT' : 'ADD_PROJECT';
-                await this._safeCommandDispatch(commandType, { projectData: settings });
+                await this._safeCommandDispatch(commandType, { projectData: settings as any });
                 new Notice(`Project "${settings.name}" ${project ? 'updated' : 'added'} ✓`, 3000);
             } catch (e: unknown) {
                 const err = e instanceof PluginError ? e : new Error(String(e));
