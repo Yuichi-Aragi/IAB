@@ -53,7 +53,7 @@ Ready to dive in? Here's the workflow.
 
 ### Installation
 For now, you'll have to install it manually.
-1.  Download the `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/your-repo/your-plugin/releases).
+1.  Download the `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/Yuichi-Aragi/IAB).
 2.  Create a new folder named `in-app-builder` inside your vault's `.obsidian/plugins/` directory.
 3.  Copy the downloaded files into that new folder.
 4.  Go to `Settings` -> `Community Plugins`, and enable "In-App Builder".
