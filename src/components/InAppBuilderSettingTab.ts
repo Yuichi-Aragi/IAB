@@ -4,7 +4,7 @@
  *       of individual, modular setting sections.
  */
 
-import { App, PluginSettingTab } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import { InAppBuilderPlugin } from '../core/InAppBuilderPlugin';
 import { container, ServiceTokens } from '../utils/DIContainer';
 import { SettingsService } from '../services/SettingsService';
@@ -23,7 +23,6 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
     // --- State Management ---
     private state: SettingTabState = 'uninitialized';
     private sections: SettingSection[] = [];
-    private styleEl?: HTMLStyleElement;
 
     constructor(app: App, plugin: InAppBuilderPlugin) {
         super(app, plugin);
@@ -43,7 +42,9 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
 
     public display(): void {
         if (this.state === 'destroyed') {
-            this.plugin.logger.log('warn', `SettingsTab: Ignoring display() - instance destroyed`);
+            // It's possible for the logger to be unavailable if the plugin was nulled out.
+            // Use a direct console log as a safe fallback.
+            (this.plugin?.logger || console).log('warn', `SettingsTab: Ignoring display() - instance destroyed`);
             return;
         }
         if (this.state !== 'uninitialized' && this.state !== 'hidden') {
@@ -58,9 +59,8 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
             const { containerEl } = this;
             containerEl.empty();
             containerEl.addClass('in-app-builder-settings-tab');
-            this._injectStyles();
 
-            containerEl.createEl('h2', { text: 'In-App Builder Settings' });
+            new Setting(containerEl).setName('In-app builder settings').setHeading();
 
             // Render all sections
             this.sections.forEach(section => section.render(containerEl));
@@ -81,7 +81,8 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
 
     public hide(): void {
         if (this.state !== 'active') {
-            this.plugin.logger.log('verbose', `SettingsTab: Ignoring hide() in state ${this.state}`);
+            // During destroy, plugin might be null.
+            (this.plugin?.logger || console).log('verbose', `SettingsTab: Ignoring hide() in state ${this.state}`);
             return;
         }
 
@@ -94,16 +95,23 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
 
     public destroy(): void {
         if (this.state === 'destroyed') return;
-        this.plugin.logger.log('verbose', `SettingsTab: Destroy initiated from state ${this.state}`);
+        
+        // It's possible for the plugin to be unloaded before the settings tab is fully destroyed,
+        // especially during rapid reloads. Caching the logger is a robust pattern.
+        const logger = this.plugin?.logger;
+
+        (logger || console).log('verbose', `SettingsTab: Destroy initiated from state ${this.state}`);
         
         this.hide(); // Ensure unload logic is called
-        this._removeStyles();
         this.containerEl.empty();
         this.sections = [];
-        this.plugin = null as any;
 
         this.state = 'destroyed';
-        this.plugin.logger.log('verbose', `SettingsTab: State → destroyed`);
+        (logger || console).log('verbose', `SettingsTab: State → destroyed`);
+
+        // Nullify references at the very end to prevent use-after-free errors
+        // and to help with garbage collection.
+        this.plugin = null as any;
     }
 
     // --- Private Helper Methods ---
@@ -111,37 +119,10 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
     private _emergencyCleanup(): void {
         try {
             this.sections.forEach(section => section.unload());
-            this._removeStyles();
             this.containerEl.empty();
         } catch (e) {
             console.error('Emergency cleanup failed:', e);
         }
         this.state = 'hidden';
-    }
-
-    private _injectStyles(): void {
-        if (this.styleEl) return;
-        const styleId = 'in-app-builder-ui-styles';
-        this.styleEl = document.createElement('style');
-        this.styleEl.id = styleId;
-        document.head.appendChild(this.styleEl);
-        this.styleEl.textContent = `
-            .in-app-builder-settings-section { margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid var(--background-modifier-border); }
-            .in-app-builder-settings-section:last-child { border-bottom: none; }
-            .in-app-builder-status-text { margin-right: 10px; }
-            .status-ok { color: var(--text-success); }
-            .status-error { color: var(--text-error); }
-            .status-progress { color: var(--text-accent); }
-            .modal-button-container { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-            .project-item { position: relative; }
-            .project-actions { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
-        `;
-    }
-
-    private _removeStyles(): void {
-        if (this.styleEl?.isConnected) {
-            document.head.removeChild(this.styleEl);
-        }
-        this.styleEl = undefined;
     }
 }

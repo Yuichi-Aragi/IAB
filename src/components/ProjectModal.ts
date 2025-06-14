@@ -65,18 +65,27 @@ export class ProjectModal extends Modal {
     onOpen(): void {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.addClass('in-app-builder-modal');
         this.inputRefs = {};
 
-        // Note: Style management is centralized in InAppBuilderSettingTab.ts
-        // to ensure robust lifecycle handling. No style injection/removal here.
-
-        contentEl.createEl('h2', { text: this.isNewProject ? 'Add New Build Project' : `Edit Project: ${(this.project as ProjectSettings).name}` });
+        this.titleEl.setText(this.isNewProject ? 'Add new build project' : `Edit project: ${(this.project as ProjectSettings).name}`);
 
         this._renderBasicSettings(contentEl);
-        this._renderBuildOptions(contentEl);
-        this._renderExternalDependencies(contentEl);
-        this._renderAdvancedSettings(contentEl);
+
+        const createDetailsSection = (title: string, isOpen: boolean = false): HTMLElement => {
+            const details = contentEl.createEl('details', { attr: { open: isOpen } });
+            details.createEl('summary', { text: title });
+            return details;
+        };
+
+        const buildOptionsEl = createDetailsSection('esbuild build options');
+        this._renderBuildOptions(buildOptionsEl);
+
+        const dependenciesEl = createDetailsSection('External CDN dependencies');
+        this._renderExternalDependencies(dependenciesEl);
+
+        const advancedEl = createDetailsSection('Logging');
+        this._renderAdvancedSettings(advancedEl);
+
         this._renderActionButtons(contentEl);
 
         // Trigger initial validation on all fields to show their current state.
@@ -98,32 +107,30 @@ export class ProjectModal extends Modal {
         validationFn: (value: string) => { valid: boolean; message?: string; normalizedValue?: string }
     ): void {
         const setting = new Setting(containerEl).setName(name).setDesc(desc);
-        const feedbackEl = createDiv({ cls: 'setting-item-feedback' });
-        setting.controlEl.appendChild(feedbackEl);
+        const controlWrapper = setting.controlEl.createDiv({ cls: 'setting-item-control-wrapper' });
 
-        setting.addText(text => {
-            this.inputRefs[projectKey] = { component: text, feedbackEl };
-            text.setPlaceholder(placeholder)
-                .setValue(this.project[projectKey as keyof typeof this.project] as string)
-                .onChange(value => {
-                    const validationResult = validationFn(value);
-                    // Use the normalized value if the validation function provides one.
-                    const finalValue = validationResult.normalizedValue !== undefined ? validationResult.normalizedValue : value.trim();
-                    (this.project[projectKey as keyof typeof this.project] as any) = finalValue;
-                    
-                    // If normalization changed the value, update the input field to reflect it.
-                    if (text.getValue() !== finalValue) {
-                         text.setValue(finalValue);
-                    }
+        const text = new TextComponent(controlWrapper)
+            .setPlaceholder(placeholder)
+            .setValue(this.project[projectKey as keyof typeof this.project] as string);
+        
+        const feedbackEl = controlWrapper.createDiv({ cls: 'setting-item-feedback' });
+        this.inputRefs[projectKey] = { component: text, feedbackEl };
 
-                    this._updateFeedback(feedbackEl, validationResult.valid, validationResult.message);
-                    text.inputEl.toggleClass('in-app-builder-input-error', !validationResult.valid);
-                });
-            // Perform initial validation on load.
-            const initialValidation = validationFn(this.project[projectKey as keyof typeof this.project] as string);
-            this._updateFeedback(feedbackEl, initialValidation.valid, initialValidation.message);
-            text.inputEl.toggleClass('in-app-builder-input-error', !initialValidation.valid);
-        });
+        const validate = (value: string) => {
+            const validationResult = validationFn(value);
+            const finalValue = validationResult.normalizedValue !== undefined ? validationResult.normalizedValue : value.trim();
+            (this.project[projectKey as keyof typeof this.project] as any) = finalValue;
+            
+            if (text.getValue() !== finalValue) {
+                 text.setValue(finalValue);
+            }
+
+            this._updateFeedback(feedbackEl, validationResult.valid, validationResult.message);
+            text.inputEl.toggleClass('in-app-builder-input-error', !validationResult.valid);
+        };
+
+        text.onChange(validate);
+        validate(this.project[projectKey as keyof typeof this.project] as string);
     }
     
     /**
@@ -134,53 +141,76 @@ export class ProjectModal extends Modal {
      */
     private _updateFeedback(feedbackEl: HTMLElement | undefined, isValid: boolean, message?: string): void {
         if (!feedbackEl) return;
-        feedbackEl.setText(message || (isValid ? '✓ Valid' : ''));
+        feedbackEl.setText(message || '');
         feedbackEl.toggleClass('setting-item-feedback-error', !isValid && !!message);
         feedbackEl.toggleClass('setting-item-feedback-valid', isValid && !!message);
-        if (isValid && !message) feedbackEl.setText('');
     }
 
     /** Renders the core project configuration settings (name, paths). */
     private _renderBasicSettings(contentEl: HTMLElement): void {
-        contentEl.createEl('h3', { text: 'Basic Configuration' });
+        new Setting(contentEl).setName('Basic configuration').setHeading();
 
-        this._createValidatedTextSetting(contentEl, 'Project Name', 'A descriptive name. Required.', 'My Awesome Plugin', 'name', value => {
+        this._createValidatedTextSetting(contentEl, 'Project name', 'A descriptive name. Required.', 'My awesome plugin', 'name', value => {
             const trimmed = value.trim();
-            if (!trimmed) return { valid: false, message: 'Project Name is required.' };
-            if (trimmed.length > 100) return {valid: false, message: 'Project Name is too long (max 100 chars).'};
-            return { valid: true, normalizedValue: trimmed };
+            if (!trimmed) return { valid: false, message: 'Project name is required.' };
+            if (trimmed.length > 100) return {valid: false, message: 'Project name is too long (max 100 chars).'};
+            return { valid: true, normalizedValue: trimmed, message: '✓ Valid' };
         });
 
-        this._createValidatedTextSetting(contentEl, 'Project Path (Folder)', 'Path to project\'s root folder. Use "." for vault root.', 'Path/To/PluginFolder or .', 'path', value => {
-            let processedValue = value.trim();
-            if (processedValue === "" || processedValue === "/") processedValue = ".";
-            else processedValue = VaultPathResolver.normalize(processedValue);
+        this._createValidatedTextSetting(contentEl, 'Project path (folder)', 'Path to project\'s root folder. Use "." for vault root.', 'Path/To/PluginFolder or .', 'path', value => {
+            const trimmedValue = value.trim();
+            if (!trimmedValue) {
+                return { valid: false, message: 'Project path is required. Use "." for vault root.' };
+            }
+
+            let processedValue = trimmedValue;
+            if (processedValue === "/") {
+                processedValue = ".";
+            } else {
+                processedValue = VaultPathResolver.normalize(processedValue);
+            }
             
-            if (processedValue.endsWith('/') && processedValue !== "." && processedValue.length > 1) processedValue = processedValue.slice(0, -1);
-            if (processedValue === "") processedValue = ".";
+            // After normalization, if it becomes empty, it means it was something like "a/.." which resolves to root.
+            if (processedValue === "") {
+                processedValue = ".";
+            }
 
-            if (!isValidVaultPath(processedValue)) return { valid: false, message: 'Invalid vault path. Check for ".." or invalid characters.', normalizedValue: processedValue };
-            return { valid: true, normalizedValue: processedValue };
+            if (!isValidVaultPath(processedValue)) {
+                return { valid: false, message: 'Invalid vault path. Check for ".." or invalid characters.', normalizedValue: processedValue };
+            }
+            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
         });
 
-        this._createValidatedTextSetting(contentEl, 'Entry Point File', 'Main TS/JS file, relative to Project Path. Required.', 'main.ts or src/index.js', 'entryPoint', value => {
-            let processedValue = VaultPathResolver.normalize(value.trim());
+        this._createValidatedTextSetting(contentEl, 'Entry point file', 'Main TS/JS file, relative to project path. Required.', 'main.ts or src/index.js', 'entryPoint', value => {
+            const trimmedValue = value.trim();
+            if (!trimmedValue) {
+                return { valid: false, message: 'Entry point file is required.' };
+            }
+
+            let processedValue = VaultPathResolver.normalize(trimmedValue);
             if (processedValue.startsWith('./')) processedValue = processedValue.substring(2);
             if (processedValue.startsWith('/')) processedValue = processedValue.substring(1);
-            if (processedValue === "") processedValue = "main.ts";
 
-            if (!isValidRelativeFilePath(processedValue)) return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
-            return { valid: true, normalizedValue: processedValue };
+            if (!isValidRelativeFilePath(processedValue)) {
+                return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
+            }
+            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
         });
 
-        this._createValidatedTextSetting(contentEl, 'Output File Path', 'Bundled JS file path, relative to Project Path. Required.', 'main.js or dist/bundle.js', 'outputFile', value => {
-            let processedValue = VaultPathResolver.normalize(value.trim());
+        this._createValidatedTextSetting(contentEl, 'Output file path', 'Bundled JS file path, relative to project path. Required.', 'main.js or dist/bundle.js', 'outputFile', value => {
+            const trimmedValue = value.trim();
+            if (!trimmedValue) {
+                return { valid: false, message: 'Output file path is required.' };
+            }
+
+            let processedValue = VaultPathResolver.normalize(trimmedValue);
             if (processedValue.startsWith('./')) processedValue = processedValue.substring(2);
             if (processedValue.startsWith('/')) processedValue = processedValue.substring(1);
-            if (processedValue === "") processedValue = "main.js";
 
-            if (!isValidRelativeFilePath(processedValue)) return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
-            return { valid: true, normalizedValue: processedValue };
+            if (!isValidRelativeFilePath(processedValue)) {
+                return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
+            }
+            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
         });
     }
 
@@ -197,20 +227,19 @@ export class ProjectModal extends Modal {
         valueKey: keyof BuildOptions
     ): void {
         const setting = new Setting(parentElement).setName(name).setDesc(description);
-        const feedbackEl = createDiv({ cls: 'setting-item-feedback' });
-        setting.controlEl.appendChild(feedbackEl);
+        const controlWrapper = setting.controlEl.createDiv({ cls: 'setting-item-control-wrapper' });
 
-        setting.addTextArea(text => {
-            this.inputRefs[valueKey] = { component: text, feedbackEl };
-            text.setPlaceholder(placeholder)
-                .setValue(this.project.buildOptions[valueKey] ? JSON.stringify(this.project.buildOptions[valueKey], null, 2) : '')
-                .onChange(value => {
-                    this._validateJsonAndUpdateProject(value, valueKey, feedbackEl, text.inputEl);
-                });
-            const validateAndStyle = () => this._validateJsonAndUpdateProject(text.getValue(), valueKey, feedbackEl, text.inputEl);
-            text.inputEl.addEventListener('blur', validateAndStyle);
-            validateAndStyle();
-        });
+        const text = new TextAreaComponent(controlWrapper)
+            .setPlaceholder(placeholder)
+            .setValue(this.project.buildOptions[valueKey] ? JSON.stringify(this.project.buildOptions[valueKey], null, 2) : '');
+        
+        const feedbackEl = controlWrapper.createDiv({ cls: 'setting-item-feedback' });
+        this.inputRefs[valueKey] = { component: text, feedbackEl };
+
+        const validateAndStyle = () => this._validateJsonAndUpdateProject(text.getValue(), valueKey, feedbackEl, text.inputEl);
+        text.onChange(validateAndStyle);
+        text.inputEl.addEventListener('blur', validateAndStyle);
+        validateAndStyle();
     }
 
     /**
@@ -283,7 +312,6 @@ export class ProjectModal extends Modal {
 
     /** Renders all settings related to the esbuild `BuildOptions`. */
     private _renderBuildOptions(contentEl: HTMLElement): void {
-        contentEl.createEl('h3', { text: 'esbuild Build Options' });
         const bo = this.project.buildOptions;
 
         new Setting(contentEl).setName('Bundle').setDesc('Enable/disable bundling. Usually true for plugins.').addToggle(toggle => {
@@ -291,31 +319,31 @@ export class ProjectModal extends Modal {
             toggle.setValue(bo.bundle === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.bundle! : bo.bundle).onChange(value => bo.bundle = value);
         });
 
-        contentEl.createEl('h4', { text: 'Minification' });
-        new Setting(contentEl).setName('Minify (General)').setDesc('Enable/disable all minification.').addToggle(toggle => {
+        new Setting(contentEl).setName('Minification').setHeading();
+        new Setting(contentEl).setName('Minify (general)').setDesc('Enable/disable all minification.').addToggle(toggle => {
             this.inputRefs['minify'] = { component: toggle };
             toggle.setValue(bo.minify === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.minify! : bo.minify).onChange(value => bo.minify = value);
         });
-        new Setting(contentEl).setName('Minify Whitespace').addToggle(toggle => {
+        new Setting(contentEl).setName('Minify whitespace').addToggle(toggle => {
             this.inputRefs['minifyWhitespace'] = { component: toggle };
             toggle.setValue(bo.minifyWhitespace === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.minifyWhitespace! : bo.minifyWhitespace!).onChange(value => bo.minifyWhitespace = value);
         });
-        new Setting(contentEl).setName('Minify Identifiers').addToggle(toggle => {
+        new Setting(contentEl).setName('Minify identifiers').addToggle(toggle => {
             this.inputRefs['minifyIdentifiers'] = { component: toggle };
             toggle.setValue(bo.minifyIdentifiers === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.minifyIdentifiers! : bo.minifyIdentifiers!).onChange(value => bo.minifyIdentifiers = value);
         });
-        new Setting(contentEl).setName('Minify Syntax').addToggle(toggle => {
+        new Setting(contentEl).setName('Minify syntax').addToggle(toggle => {
             this.inputRefs['minifySyntax'] = { component: toggle };
             toggle.setValue(bo.minifySyntax === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.minifySyntax! : bo.minifySyntax!).onChange(value => bo.minifySyntax = value);
         });
 
-        contentEl.createEl('h4', { text: 'Output & Environment' });
+        new Setting(contentEl).setName('Output & environment').setHeading();
         new Setting(contentEl).setName('Sourcemap').addDropdown(dropdown => {
             this.inputRefs['sourcemap'] = { component: dropdown };
-            dropdown.addOption("false", "No Sourcemap")
-                    .addOption("true", "Separate File (.map)")
-                    .addOption("inline", "Inline Sourcemap")
-                    .addOption("external", "External File (no link)")
+            dropdown.addOption("false", "No sourcemap")
+                    .addOption("true", "Separate file (.map)")
+                    .addOption("inline", "Inline sourcemap")
+                    .addOption("external", "External file (no link)")
                     .setValue(String(bo.sourcemap === undefined ? DEFAULT_PROJECT_BUILD_OPTIONS.sourcemap! : bo.sourcemap))
                     .onChange((value: string) => {
                         if (value === "inline" || value === "external") bo.sourcemap = value;
@@ -323,37 +351,34 @@ export class ProjectModal extends Modal {
                     });
         });
         
-        const targetSetting = new Setting(contentEl).setName('Target Environments').setDesc('Comma-separated (e.g., "chrome58,es2018").');
-        const targetFeedbackEl = createDiv({ cls: 'setting-item-feedback' });
-        targetSetting.controlEl.appendChild(targetFeedbackEl);
-        targetSetting.addText(text => {
-            this.inputRefs['target'] = { component: text, feedbackEl: targetFeedbackEl };
-            const defaultTargetStr = Array.isArray(DEFAULT_PROJECT_BUILD_OPTIONS.target) ? DEFAULT_PROJECT_BUILD_OPTIONS.target.join(',') : DEFAULT_PROJECT_BUILD_OPTIONS.target!;
-            const currentTargetStr = Array.isArray(bo.target) ? bo.target.join(',') : (bo.target || '');
-            text.setPlaceholder(defaultTargetStr).setValue(currentTargetStr)
-                .onChange(value => {
-                    const trimmed = value.trim();
-                    let isValid = true;
-                    let message = '';
-                    if (!trimmed) {
+        const targetSetting = new Setting(contentEl).setName('Target environments').setDesc('Comma-separated (e.g., "chrome58,es2018").');
+        const targetControlWrapper = targetSetting.controlEl.createDiv({ cls: 'setting-item-control-wrapper' });
+        const targetText = new TextComponent(targetControlWrapper)
+            .setPlaceholder(Array.isArray(DEFAULT_PROJECT_BUILD_OPTIONS.target) ? DEFAULT_PROJECT_BUILD_OPTIONS.target.join(',') : DEFAULT_PROJECT_BUILD_OPTIONS.target!)
+            .setValue(Array.isArray(bo.target) ? bo.target.join(',') : (bo.target || ''));
+        const targetFeedbackEl = targetControlWrapper.createDiv({ cls: 'setting-item-feedback' });
+        targetText.onChange(value => {
+                const trimmed = value.trim();
+                let isValid = true;
+                let message = '';
+                if (!trimmed) {
+                    bo.target = DEFAULT_PROJECT_BUILD_OPTIONS.target;
+                    message = 'Using default target.';
+                } else {
+                    const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
+                    if (parts.some(p => !/^[a-z0-9.-]+$/i.test(p))) {
+                        isValid = false;
+                        message = 'Invalid characters in target.';
                         bo.target = DEFAULT_PROJECT_BUILD_OPTIONS.target;
-                        message = 'Using default target.';
                     } else {
-                        const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
-                        // A safe but permissive regex for esbuild targets like 'es2020' or 'node14.5'
-                        if (parts.some(p => !/^[a-z0-9.-]+$/i.test(p))) {
-                            isValid = false;
-                            message = 'Invalid characters in target.';
-                            bo.target = DEFAULT_PROJECT_BUILD_OPTIONS.target;
-                        } else {
-                            bo.target = parts.length > 1 ? parts : parts[0];
-                            message = '✓ Valid';
-                        }
+                        bo.target = parts.length > 1 ? parts : parts[0];
+                        message = '✓ Valid';
                     }
-                    this._updateFeedback(targetFeedbackEl, isValid, message);
-                    text.inputEl.toggleClass('in-app-builder-input-error', !isValid);
-                });
-        });
+                }
+                this._updateFeedback(targetFeedbackEl, isValid, message);
+                targetText.inputEl.toggleClass('in-app-builder-input-error', !isValid);
+            });
+        this.inputRefs['target'] = { component: targetText, feedbackEl: targetFeedbackEl };
 
         new Setting(contentEl).setName('Format').addDropdown(dd => {
             this.inputRefs['format'] = { component: dd };
@@ -366,119 +391,125 @@ export class ProjectModal extends Modal {
               .setValue(bo.platform || DEFAULT_PROJECT_BUILD_OPTIONS.platform!).onChange(value => bo.platform = value as EsbuildPlatform);
         });
 
-        contentEl.createEl('h4', { text: 'Advanced Customization' });
-        this._createJsonTextAreaSetting(contentEl, 'Define (Global Constants)', 'JSON: {"key": "value"} for global replacements.', 'e.g., {"API_KEY": "\\"123\\"}"}', 'define');
+        new Setting(contentEl).setName('Advanced customization').setHeading();
+        this._createJsonTextAreaSetting(contentEl, 'Define (global constants)', 'JSON: {"key": "value"} for global replacements.', 'e.g., {"API_KEY": "\\"123\\"}"}', 'define');
         
-        const resolveExtSetting = new Setting(contentEl).setName('Resolve Extensions').setDesc('Comma-separated (e.g., ".ts,.js").');
-        const resolveExtFeedbackEl = createDiv({ cls: 'setting-item-feedback' });
-        resolveExtSetting.controlEl.appendChild(resolveExtFeedbackEl);
-        resolveExtSetting.addText(text => {
-            this.inputRefs['resolveExtensions'] = { component: text, feedbackEl: resolveExtFeedbackEl };
-            const defaultExtStr = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions!.join(',');
-            text.setPlaceholder(defaultExtStr).setValue(bo.resolveExtensions ? bo.resolveExtensions.join(',') : '')
-                .onChange(value => {
-                    const trimmed = value.trim();
-                    let isValid = true;
-                    let message = '';
-                    if (!trimmed) {
+        const resolveExtSetting = new Setting(contentEl).setName('Resolve extensions').setDesc('Comma-separated (e.g., ".ts,.js").');
+        const resolveExtControlWrapper = resolveExtSetting.controlEl.createDiv({ cls: 'setting-item-control-wrapper' });
+        const resolveExtText = new TextComponent(resolveExtControlWrapper)
+            .setPlaceholder(DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions!.join(','))
+            .setValue(bo.resolveExtensions ? bo.resolveExtensions.join(',') : '');
+        const resolveExtFeedbackEl = resolveExtControlWrapper.createDiv({ cls: 'setting-item-feedback' });
+        resolveExtText.onChange(value => {
+                const trimmed = value.trim();
+                let isValid = true;
+                let message = '';
+                if (!trimmed) {
+                    bo.resolveExtensions = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
+                    message = 'Using default extensions.';
+                } else {
+                    const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
+                    if (parts.some(p => !p.startsWith('.') || p.length < 2)) {
+                        isValid = false;
+                        message = 'Each extension must start with ".".';
                         bo.resolveExtensions = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
-                        message = 'Using default extensions.';
                     } else {
-                        const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
-                        if (parts.some(p => !p.startsWith('.') || p.length < 2)) {
-                            isValid = false;
-                            message = 'Each extension must start with ".".';
-                            bo.resolveExtensions = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
-                        } else {
-                            bo.resolveExtensions = parts;
-                            message = '✓ Valid';
-                        }
+                        bo.resolveExtensions = parts;
+                        message = '✓ Valid';
                     }
-                     this._updateFeedback(resolveExtFeedbackEl, isValid, message);
-                     text.inputEl.toggleClass('in-app-builder-input-error', !isValid);
-                });
-        });
+                }
+                 this._updateFeedback(resolveExtFeedbackEl, isValid, message);
+                 resolveExtText.inputEl.toggleClass('in-app-builder-input-error', !isValid);
+            });
+        this.inputRefs['resolveExtensions'] = { component: resolveExtText, feedbackEl: resolveExtFeedbackEl };
 
-        this._createJsonTextAreaSetting(contentEl, 'Loaders (File Extension to Loader)', 'JSON: {".ext": "loader"} for custom loaders.', 'e.g., {".mydata": "text"}', 'loader');
+        this._createJsonTextAreaSetting(contentEl, 'Loaders (file extension to loader)', 'JSON: {".ext": "loader"} for custom loaders.', 'e.g., {".mydata": "text"}', 'loader');
 
-        const externalSetting = new Setting(contentEl).setName('External Modules').setDesc('Comma-separated module names to exclude.');
-        const externalFeedbackEl = createDiv({ cls: 'setting-item-feedback' });
-        externalSetting.controlEl.appendChild(externalFeedbackEl);
-        externalSetting.addText(text => {
-            this.inputRefs['external'] = { component: text, feedbackEl: externalFeedbackEl };
-            const defaultExtStr = DEFAULT_PROJECT_BUILD_OPTIONS.external!.join(',');
-            text.setPlaceholder(defaultExtStr).setValue(bo.external ? bo.external.join(',') : '')
-                .onChange(value => {
-                    const trimmed = value.trim();
-                     let isValid = true;
-                     let message = '';
-                    if (!trimmed) {
+        const externalSetting = new Setting(contentEl).setName('External modules').setDesc('Comma-separated module names to exclude.');
+        const externalControlWrapper = externalSetting.controlEl.createDiv({ cls: 'setting-item-control-wrapper' });
+        const externalText = new TextComponent(externalControlWrapper)
+            .setPlaceholder(DEFAULT_PROJECT_BUILD_OPTIONS.external!.join(','))
+            .setValue(bo.external ? bo.external.join(',') : '');
+        const externalFeedbackEl = externalControlWrapper.createDiv({ cls: 'setting-item-feedback' });
+        externalText.onChange(value => {
+                const trimmed = value.trim();
+                 let isValid = true;
+                 let message = '';
+                if (!trimmed) {
+                    bo.external = DEFAULT_PROJECT_BUILD_OPTIONS.external;
+                    message = 'Using default external modules.';
+                } else {
+                    const parts = trimmed.split(',').map(s => s.trim());
+                    if (parts.some(p => !p || !/^[a-z0-9@_./-]+$/i.test(p))) {
+                        isValid = false;
+                        message = 'Contains invalid module names.';
                         bo.external = DEFAULT_PROJECT_BUILD_OPTIONS.external;
-                        message = 'Using default external modules.';
                     } else {
-                        const parts = trimmed.split(',').map(s => s.trim());
-                        // Regex for valid package names, including scoped packages.
-                        if (parts.some(p => !p || !/^[a-z0-9@_./-]+$/i.test(p))) {
-                            isValid = false;
-                            message = 'Contains invalid module names.';
-                            bo.external = DEFAULT_PROJECT_BUILD_OPTIONS.external;
-                        } else {
-                            bo.external = parts.filter(p => p);
-                            message = '✓ Valid';
-                        }
+                        bo.external = parts.filter(p => p);
+                        message = '✓ Valid';
                     }
-                    this._updateFeedback(externalFeedbackEl, isValid, message);
-                    text.inputEl.toggleClass('in-app-builder-input-error', !isValid);
-                });
-        });
+                }
+                this._updateFeedback(externalFeedbackEl, isValid, message);
+                externalText.inputEl.toggleClass('in-app-builder-input-error', !isValid);
+            });
+        this.inputRefs['external'] = { component: externalText, feedbackEl: externalFeedbackEl };
     }
 
     /** Renders the dynamic list of external CDN dependencies. */
     private _renderExternalDependencies(contentEl: HTMLElement): void {
-        contentEl.createEl('h3', { text: 'External CDN Dependencies' });
         contentEl.createEl('p', { text: "List external JS libraries from CDNs.", cls: 'setting-item-description' });
 
-        const dependenciesEl = contentEl.createDiv({ cls: 'dependencies-list' });
-        const renderDependencies = () => {
-            dependenciesEl.empty();
-            (this.project.dependencies || []).forEach((dep, index) => {
-                const depItemEl = dependenciesEl.createDiv({ cls: 'dependency-item setting-item' });
-                const controlsEl = depItemEl.createDiv({ cls: 'setting-item-control in-app-builder-dependency-controls' });
-                const feedbackEl = createDiv({ cls: 'setting-item-feedback', style: 'width: 100%; margin-top: 0;' });
+        const dependenciesContainer = contentEl.createDiv({ cls: 'dependencies-list' });
 
-                const nameInput = new TextComponent(controlsEl).setPlaceholder('Module Name (e.g., moment)').setValue(dep.name);
-                const urlInput = new TextComponent(controlsEl).setPlaceholder('Full HTTPS/HTTP URL').setValue(dep.url);
+        const renderDependencies = () => {
+            dependenciesContainer.empty();
+            (this.project.dependencies || []).forEach((dep, index) => {
+                const depItemEl = dependenciesContainer.createDiv({ cls: 'dependency-item setting-item' });
                 
+                const controlEl = depItemEl.createDiv({ cls: 'setting-item-control in-app-builder-dependency-controls' });
+                
+                const inputsWrapper = controlEl.createDiv({ cls: 'in-app-builder-dependency-inputs' });
+                const nameInput = new TextComponent(inputsWrapper).setPlaceholder('Module Name (e.g., moment)').setValue(dep.name);
+                const urlInput = new TextComponent(inputsWrapper).setPlaceholder('Full HTTPS/HTTP URL').setValue(dep.url);
+                
+                const feedbackEl = inputsWrapper.createDiv({ cls: 'setting-item-feedback' });
+
+                new ButtonComponent(controlEl).setIcon('trash').setTooltip('Remove dependency').onClick(() => {
+                    this.project.dependencies!.splice(index, 1);
+                    renderDependencies();
+                });
+
                 const validateDepPair = () => {
                     dep.name = nameInput.getValue().trim();
                     dep.url = urlInput.getValue().trim();
                     const validation = validateDependency(dep);
-                    if ((dep.name && !dep.url) || (!dep.name && dep.url) || (dep.name && dep.url && !validation.valid)) {
-                        this._updateFeedback(feedbackEl, false, validation.error || "Both name and URL are required.");
-                    } else if (dep.name && dep.url && validation.valid) {
-                        this._updateFeedback(feedbackEl, true, "✓ Valid");
-                    } else {
-                        feedbackEl.setText('');
+                    let isValid = true;
+                    let message = '';
+
+                    if (dep.name || dep.url) { // Only validate if at least one field is filled
+                        if (validation.valid) {
+                            message = '✓ Valid';
+                        } else {
+                            isValid = false;
+                            message = validation.error || "Both name and URL are required and must be valid.";
+                        }
                     }
-                    nameInput.inputEl.toggleClass('in-app-builder-input-error', !!(feedbackEl.textContent && !validation.valid && dep.name));
-                    urlInput.inputEl.toggleClass('in-app-builder-input-error', !!(feedbackEl.textContent && !validation.valid && dep.url));
+                    
+                    this._updateFeedback(feedbackEl, isValid, message);
+                    nameInput.inputEl.toggleClass('in-app-builder-input-error', !isValid && !!dep.name);
+                    urlInput.inputEl.toggleClass('in-app-builder-input-error', !isValid && !!dep.url);
                 };
 
                 nameInput.onChange(validateDepPair);
                 urlInput.onChange(validateDepPair);
-                
-                new ButtonComponent(controlsEl).setIcon('trash').setTooltip('Remove Dependency').onClick(() => {
-                    this.project.dependencies!.splice(index, 1);
-                    renderDependencies();
-                });
-                depItemEl.appendChild(feedbackEl);
                 validateDepPair();
             });
         };
+
         if (!this.project.dependencies) this.project.dependencies = [];
         renderDependencies();
 
-        new Setting(contentEl).addButton(button => button.setButtonText('Add CDN Dependency').onClick(() => {
+        new Setting(contentEl).addButton(button => button.setButtonText('Add CDN dependency').onClick(() => {
             if (!this.project.dependencies) this.project.dependencies = [];
             this.project.dependencies.push({ name: '', url: '' });
             renderDependencies();
@@ -487,8 +518,7 @@ export class ProjectModal extends Modal {
 
     /** Renders advanced settings like logging level. */
     private _renderAdvancedSettings(contentEl: HTMLElement): void {
-        contentEl.createEl('h3', { text: 'Logging' });
-        new Setting(contentEl).setName('Build Log Level').setDesc('Verbosity of logs for this project\'s build process.').addDropdown(dropdown => {
+        new Setting(contentEl).setName('Build log level').setDesc('Verbosity of logs for this project\'s build process.').addDropdown(dropdown => {
             this.inputRefs['logLevel'] = { component: dropdown };
             dropdown.addOption('error', 'Error').addOption('warn', 'Warning').addOption('info', 'Info (Default)').addOption('verbose', 'Verbose (Debug)').addOption('silent', 'Silent')
                     .setValue(this.project.logLevel || DEFAULT_PROJECT_LOG_LEVEL).onChange((value: string) => this.project.logLevel = value as LogLevel);
@@ -536,23 +566,29 @@ export class ProjectModal extends Modal {
 
     /** Renders the final action buttons (Save/Add, Cancel). */
     private _renderActionButtons(contentEl: HTMLElement): void {
-        new Setting(contentEl).addButton(button => button
-            .setButtonText(this.isNewProject ? 'Add Project' : 'Save Changes')
-            .setCta()
-            .onClick(async () => {
-                if (!this._validateAllFields()) {
-                    new Notice('Please correct the errors in the form before submitting.', 7000);
-                    return;
-                }
-                
-                // Final cleanup before submitting.
-                this.project.dependencies = (this.project.dependencies || []).filter(dep => dep.name && dep.url && validateDependency(dep).valid);
-                this.project.buildOptions = { ...DEFAULT_PROJECT_BUILD_OPTIONS, ...this.project.buildOptions };
-                this.project.logLevel = this.project.logLevel || DEFAULT_PROJECT_LOG_LEVEL;
+        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+        new Setting(buttonContainer)
+            .addButton(button => button
+                .setButtonText('Cancel')
+                .onClick(() => this.close())
+            )
+            .addButton(button => button
+                .setButtonText(this.isNewProject ? 'Add project' : 'Save changes')
+                .setCta()
+                .onClick(async () => {
+                    if (!this._validateAllFields()) {
+                        new Notice('Please correct the errors in the form before submitting.', 7000);
+                        return;
+                    }
+                    
+                    // Final cleanup before submitting.
+                    this.project.dependencies = (this.project.dependencies || []).filter(dep => dep.name && dep.url && validateDependency(dep).valid);
+                    this.project.buildOptions = { ...DEFAULT_PROJECT_BUILD_OPTIONS, ...this.project.buildOptions };
+                    this.project.logLevel = this.project.logLevel || DEFAULT_PROJECT_LOG_LEVEL;
 
-                await this.onSubmit(this.project);
-                this.close();
-            }));
+                    await this.onSubmit(this.project);
+                    this.close();
+                }));
     }
 
     onClose(): void {
