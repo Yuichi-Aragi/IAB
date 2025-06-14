@@ -6,7 +6,7 @@
 
 ## The "Why" - A Rant from the Author
 
-Let's be honest. I love making plugins for Obsidian. It's fun, it's rewarding, and it lets me tailor my favorite app to my exact needs. But you know what I *don't* love? The ceremony.
+I'll be honest. I love making plugins for Obsidian. It's fun, it's rewarding, and it lets me tailor my favorite app to my exact needs. But you know what I *don't* love? The ceremony.
 
 Every time I wanted to tweak a tiny bit of TypeScript, I had to:
 1.  Open my code editor.
@@ -19,17 +19,7 @@ Every time I wanted to tweak a tiny bit of TypeScript, I had to:
 
 And if I was away from my main computer? Forget it. Trying to get a Node.js environment running on a tablet or a friend's laptop, or wrestling with Replit or GitHub Actions just to compile a 50-line plugin... it was infuriating.
 
-So, I built this. **In-App Builder** is my solution. It's a plugin that builds other plugins, right inside Obsidian. It uses the magic of `esbuild-wasm` to compile, bundle, and spit out your finished plugin files directly into your vault. No Node.js, no npm, no command line. Just you, your code, and Obsidian.
-
-## ⚠️ A Word of Warning: This is a BETA!
-
-I'm putting this out there because I think it's already useful, but let's set some expectations:
-
-*   **IT HAS BUGS.** I know it does. I've probably created more bugs than features. But I also know that it's *pretty much usable* if you're willing to put in a little effort and maybe reload Obsidian once or twice.
-*   **THE CACHE IS A LIE.** You'll see a beautiful "Enable Caching" toggle in the settings. It looks great. It even toggles. **It does nothing.** I have plans to make it work, but for now, it's just there to remind me of my ambitions. Turning it on won't break anything, but it won't help either. The plugin will fetch esbuild from the CDN every time you load Obsidian.
-*   **I CAN'T PROMISE SUPPORT.** I built this to solve my own problem. I'm sharing it in case it solves yours too. I might fix bugs, I might add features, or I might get distracted by a shiny new idea and forget this exists for six months. There are no guarantees.
-
-Think of this as a powerful, but slightly untamed, tool.
+So, I built this. **In-App Builder** is my solution, **specially** for mobile. It's a plugin that builds other plugins, right inside Obsidian. It uses the magic of `esbuild-wasm` to compile, bundle, and spit out your finished plugin files directly into your vault. No Node.js, no npm, no command line. Just you, your code, and Obsidian.
 
 ## ✨ Features (What it CAN do)
 
