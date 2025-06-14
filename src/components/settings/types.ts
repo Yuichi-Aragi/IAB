@@ -10,7 +10,6 @@ import { NewProjectSettings, ProjectSettings, PluginSettings } from '../../types
  */
 export type CommandPayloadMap = {
     REINITIALIZE_ESBUILD: { initiatorId: string };
-    CLEAR_CACHE: {};
     ADD_PROJECT: { projectData: NewProjectSettings };
     UPDATE_PROJECT: { projectData: ProjectSettings };
     REMOVE_PROJECT: { projectId: string };
