@@ -5,22 +5,20 @@ on:
     tags:
       - '*' # This workflow runs on any tag push
 
-# Grant permissions for the workflow to create releases and commit files
 permissions:
-  contents: write
+  contents: write # Allows creating releases and pushing commits
 
 jobs:
   build_and_release:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout the repository code
+      # 1. Checkout the repository code at the specific tag
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch all history for all branches and tags
+          fetch-depth: 0 # Required to switch branches later
 
-      # 2. Check for package-lock.json BEFORE setting up Node
-      # This step is crucial to decide if we can use caching.
+      # 2. Check for package-lock.json to determine caching strategy
       - name: Check for package-lock.json
         id: check_lockfile
         run: |
@@ -30,8 +28,7 @@ jobs:
             echo "lockfile_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # 3. Set up Node.js environment (Conditional Caching)
-      # This is the core fix. We have two mutually exclusive steps.
+      # 3. Set up Node.js with conditional caching
       - name: Set up Node.js with caching
         if: steps.check_lockfile.outputs.lockfile_exists == 'true'
         uses: actions/setup-node@v4
@@ -45,12 +42,11 @@ jobs:
         with:
           node-version: '20'
 
-      # 4. Handle package-lock.json and install dependencies
-      # This logic remains the same, but now it runs after a successful Node setup.
+      # 4. Install dependencies (and potentially create/update package-lock.json)
       - name: Install dependencies with npm ci (if lockfile exists)
         if: steps.check_lockfile.outputs.lockfile_exists == 'true'
         id: npm_ci
-        continue-on-error: true # Continue if npm ci fails (e.g., corrupted lockfile)
+        continue-on-error: true
         run: npm ci
 
       - name: Install dependencies with npm install (if lockfile is missing or ci failed)
@@ -62,7 +58,8 @@ jobs:
           fi
           npm install
 
-      # 5. Commit the new package-lock.json if it was created or modified
+      # 5. Check if package-lock.json was created or modified
+      # We do this check now, but act on it later.
       - name: Check for changes in package-lock.json
         id: lockfile_status
         run: |
@@ -72,32 +69,19 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit and push package-lock.json
-        if: steps.lockfile_status.outputs.changed == 'true'
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add package-lock.json
-          git commit -m "chore: update package-lock.json"
-          git push
-
-      # 6. Build the plugin for production
+      # 6. Build the plugin for production (using the tagged code)
       - name: Build plugin
         id: build
         run: npm run build
 
       # 7. Prepare release assets
       - name: Prepare release assets
-        id: prepare_assets
         run: |
           mkdir release-assets
           cp build/main.js release-assets/
           cp manifest.json release-assets/
           if [ -f build/styles.css ]; then
             cp build/styles.css release-assets/
-            echo "styles.css was packaged."
-          else
-            echo "No styles.css file found to package. Continuing."
           fi
 
       # 8. Get version and tag info for the release
@@ -138,9 +122,8 @@ jobs:
               }
             } catch (error) {
               if (error.status === 404) {
-                console.log(`No existing release found for tag ${process.env.tag_name}. Proceeding to create a new one.`);
+                console.log(`No existing release found for tag ${process.env.tag_name}.`);
               } else {
-                console.error('An error occurred while trying to find an existing release:');
                 throw error;
               }
             }
@@ -162,3 +145,20 @@ jobs:
             release-assets/main.js
             release-assets/manifest.json
             release-assets/styles.css
+
+      # 12. Commit and push package-lock.json to the main branch (if changed)
+      # This is the corrected step, now placed at the end of the job.
+      - name: Commit and push package-lock.json
+        if: steps.lockfile_status.outputs.changed == 'true'
+        run: |
+          # The new package-lock.json is an untracked file in our detached HEAD state.
+          # We switch to the main branch, which brings the untracked file along.
+          git checkout "${{ github.event.repository.default_branch }}"
+          
+          # Now configure the user and commit to the main branch
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          # Add [skip ci] to the commit message to prevent a workflow loop
+          git commit -m "chore: update package-lock.json [skip ci]"
+          git push
