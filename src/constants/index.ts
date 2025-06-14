@@ -46,15 +46,6 @@ export const MAX_SOURCE_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 // --- Configuration Defaults ---
 
-/** Directory name for caching esbuild assets within the vault root. */
-export const CACHE_DIR = '.in-app-builder-cache';
-
-/** The size of each binary chunk for the cached WASM file. 4MB is a safe value for most file systems and APIs. */
-export const CACHE_CHUNK_SIZE_BYTES = 2 * 1024 * 1024; // 4 MB
-
-/** Default setting for enabling the asset cache. */
-export const DEFAULT_ENABLE_CACHE = true;
-
 /** Default global log level for the plugin. */
 export const DEFAULT_GLOBAL_LOG_LEVEL: LogLevel = 'info';
 
