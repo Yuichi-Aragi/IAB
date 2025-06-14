@@ -16,18 +16,11 @@ jobs:
       # 1. Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v4
-        # Fetch all history for all branches and tags
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Fetch all history for all branches and tags
 
-      # 2. Set up Node.js environment
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20' # Use a current LTS version
-          cache: 'npm'
-
-      # 3. Handle package-lock.json and install dependencies
+      # 2. Check for package-lock.json BEFORE setting up Node
+      # This step is crucial to decide if we can use caching.
       - name: Check for package-lock.json
         id: check_lockfile
         run: |
@@ -37,10 +30,27 @@ jobs:
             echo "lockfile_exists=false" >> $GITHUB_OUTPUT
           fi
 
+      # 3. Set up Node.js environment (Conditional Caching)
+      # This is the core fix. We have two mutually exclusive steps.
+      - name: Set up Node.js with caching
+        if: steps.check_lockfile.outputs.lockfile_exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Node.js without caching
+        if: steps.check_lockfile.outputs.lockfile_exists == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 4. Handle package-lock.json and install dependencies
+      # This logic remains the same, but now it runs after a successful Node setup.
       - name: Install dependencies with npm ci (if lockfile exists)
         if: steps.check_lockfile.outputs.lockfile_exists == 'true'
         id: npm_ci
-        continue-on-error: true # Continue if npm ci fails
+        continue-on-error: true # Continue if npm ci fails (e.g., corrupted lockfile)
         run: npm ci
 
       - name: Install dependencies with npm install (if lockfile is missing or ci failed)
@@ -52,7 +62,7 @@ jobs:
           fi
           npm install
 
-      # 4. Commit the new package-lock.json if it was created or modified
+      # 5. Commit the new package-lock.json if it was created or modified
       - name: Check for changes in package-lock.json
         id: lockfile_status
         run: |
@@ -71,23 +81,18 @@ jobs:
           git commit -m "chore: update package-lock.json"
           git push
 
-      # 5. Build the plugin for production
+      # 6. Build the plugin for production
       - name: Build plugin
         id: build
         run: npm run build
 
-      # 6. Prepare release assets
+      # 7. Prepare release assets
       - name: Prepare release assets
         id: prepare_assets
         run: |
-          # Create a directory for the release assets
           mkdir release-assets
-
-          # Copy the essential files
           cp build/main.js release-assets/
           cp manifest.json release-assets/
-
-          # Conditionally copy styles.css if it exists after the build
           if [ -f build/styles.css ]; then
             cp build/styles.css release-assets/
             echo "styles.css was packaged."
@@ -95,28 +100,24 @@ jobs:
             echo "No styles.css file found to package. Continuing."
           fi
 
-      # 7. Get version and tag info for the release
+      # 8. Get version and tag info for the release
       - name: Get release info
         id: get_info
         run: |
-          # Extract tag name from the Git ref
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
-
-          # Extract version from manifest.json
           VERSION=$(jq -r .version manifest.json)
           echo "version=$VERSION" >> $GITHUB_ENV
 
-      # 8. Verify that the tag matches the manifest version
+      # 9. Verify that the tag matches the manifest version
       - name: Verify tag and manifest version match
         run: |
-          # The 'v' prefix in the tag is optional
           if [ "v${{ env.version }}" != "${{ env.tag_name }}" ] && [ "${{ env.version }}" != "${{ env.tag_name }}" ]; then
             echo "Error: Tag name '${{ env.tag_name }}' does not match manifest version '${{ env.version }}'."
             exit 1
           fi
 
-      # 9. Overwrite existing release if one with the same tag exists
+      # 10. Overwrite existing release if one with the same tag exists
       - name: Delete existing release
         uses: actions/github-script@v7
         with:
@@ -147,7 +148,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ env.tag_name }}
 
-      # 10. Create the new GitHub Release
+      # 11. Create the new GitHub Release
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
