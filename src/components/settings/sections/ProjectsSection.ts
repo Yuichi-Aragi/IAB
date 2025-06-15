@@ -23,11 +23,15 @@ export class ProjectsSection extends SettingSection {
         const details = containerEl.createEl('details', { cls: 'in-app-builder-settings-section', attr: { open: true } });
         details.createEl('summary', { text: 'Projects' });
         
+        // This button is always visible, providing a consistent entry point.
         new Setting(details)
             .addButton(button => button
                 .setButtonText('Add new project')
+                .setCta() // Make it a primary action button for better visibility.
                 .onClick(() => this._openProjectModal(null)));
 
+        // This is the container that will hold EITHER the list of projects
+        // OR the "empty state" message.
         this.projectsContainerEl = details.createDiv();
     }
 
@@ -73,22 +77,18 @@ export class ProjectsSection extends SettingSection {
             return;
         }
     
-        this.logger.log('verbose', `[ProjectsSection] Updating projects list. New count: ${projects.length}. Current UI controls count before clear: ${this.projectUiControls.size}`);
+        this.logger.log('verbose', `[ProjectsSection] Updating projects list. New count: ${projects.length}.`);
     
-        // Clear all existing DOM elements from the container.
         this.projectsContainerEl.empty();
-        // Clear all internal references to old UI controls.
         this.projectUiControls.clear();
     
         if (projects.length === 0) {
-            this.projectsContainerEl.createEl('p', { text: 'No projects configured. Click "Add new project" to start.', cls: 'empty-state' });
-            this.logger.log('verbose', '[ProjectsSection] Rendered empty state for projects list.');
+            this.logger.log('verbose', '[ProjectsSection] No projects found, empty state message is not rendered.');
         } else {
             for (const project of projects) {
-                // _renderProjectItem will add the new controls to this.projectUiControls
                 this._renderProjectItem(project);
             }
-            this.logger.log('verbose', `[ProjectsSection] Re-rendered ${projects.length} project items. UI controls count after render: ${this.projectUiControls.size}`);
+            this.logger.log('verbose', `[ProjectsSection] Re-rendered ${projects.length} project items.`);
         }
     }
 
@@ -131,10 +131,6 @@ export class ProjectsSection extends SettingSection {
             .setIcon('play')
             .setTooltip(`Build ${project.name}`)
             .onClick(() => {
-                // Fetch the latest project data directly from settings service before dispatching
-                // This ensures that even if the 'project' reference in closure was somehow stale,
-                // the command uses the most up-to-date ID.
-                // However, with full re-render, the 'project' in closure should be fresh.
                 const currentProject = this.settingsService.getSettings().projects.find(p => p.id === project.id);
                 if (currentProject) {
                     this._safeCommandDispatch('BUILD_PROJECT', { projectId: currentProject.id, initiator: 'settings-tab' });
@@ -160,7 +156,6 @@ export class ProjectsSection extends SettingSection {
             .setIcon('pencil')
             .setTooltip('Edit project')
             .onClick(() => {
-                // Fetch the latest project data directly from settings service before opening modal
                 const currentProject = this.settingsService.getSettings().projects.find(p => p.id === project.id);
                 if (currentProject) {
                     this._openProjectModal(currentProject);
@@ -186,8 +181,6 @@ export class ProjectsSection extends SettingSection {
     }
 
     private _openProjectModal(project: ProjectSettings | null): void {
-        // 'project' here is now guaranteed to be fresh if coming from an edit button click
-        // due to the re-render strategy or direct fetch.
         new ProjectModal(this.app, project, async (settingsToSave: NewProjectSettings | ProjectSettings) => {
             try {
                 const commandType = (settingsToSave as ProjectSettings).id ? 'UPDATE_PROJECT' : 'ADD_PROJECT';
@@ -202,7 +195,6 @@ export class ProjectsSection extends SettingSection {
     }
 
     private _confirmProjectDeletion(project: ProjectSettings): void {
-        // 'project' here is fresh.
         const confirmModal = new Modal(this.app);
         confirmModal.titleEl.setText(`Delete "${project.name}"?`);
         confirmModal.contentEl.createEl('p', { text: 'This will permanently remove the project configuration and cannot be undone.' });
