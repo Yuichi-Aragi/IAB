@@ -12,9 +12,10 @@ export class EsbuildStatusSection extends SettingSection {
     private reinitializeEsbuildBtn?: ButtonComponent;
 
     public render(containerEl: HTMLElement): void {
-        const esbuildStatusSection = containerEl.createDiv({ cls: 'in-app-builder-settings-section' });
-        new Setting(esbuildStatusSection).setName('esbuild service status').setHeading();
-        const statusSetting = new Setting(esbuildStatusSection).setName('Current status');
+        const details = containerEl.createEl('details', { cls: 'in-app-builder-settings-section' });
+        details.createEl('summary', { text: 'esbuild Service Status' });
+        
+        const statusSetting = new Setting(details).setName('Current status');
         statusSetting.settingEl.addClass('esbuild-status-setting');
         
         this.esbuildStatusEl = statusSetting.controlEl.createSpan({ cls: 'in-app-builder-status-text' });

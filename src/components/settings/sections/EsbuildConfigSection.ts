@@ -10,29 +10,36 @@ import { DEFAULT_ESBUILD_JS_CDN_URL, DEFAULT_ESBUILD_WASM_CDN_URL } from '../../
 export class EsbuildConfigSection extends SettingSection {
     private esbuildJsCdnUrlInput?: TextComponent;
     private esbuildWasmCdnUrlInput?: TextComponent;
+    private isLoading = false;
 
     public render(containerEl: HTMLElement): void {
-        const esbuildConfigSection = containerEl.createDiv({ cls: 'in-app-builder-settings-section' });
-        new Setting(esbuildConfigSection).setName('esbuild library configuration').setHeading();
-        esbuildConfigSection.createEl('p', {
+        const details = containerEl.createEl('details', { cls: 'in-app-builder-settings-section' });
+        details.createEl('summary', { text: 'esbuild Library Configuration' });
+        
+        details.createEl('p', {
             text: 'Configure the CDN URLs from which to fetch the esbuild library. The plugin will always fetch these assets on startup or when re-initialized.',
             cls: 'setting-item-description'
         });
 
         this.esbuildJsCdnUrlInput = this._createEsbuildUrlSetting(
-            esbuildConfigSection, 'esbuild.min.js CDN URL', 'URL for main esbuild JavaScript file',
+            details, 'esbuild.min.js CDN URL', 'URL for main esbuild JavaScript file',
             DEFAULT_ESBUILD_JS_CDN_URL, 'esbuildJsCdnUrl'
         );
 
         this.esbuildWasmCdnUrlInput = this._createEsbuildUrlSetting(
-            esbuildConfigSection, 'esbuild.wasm CDN URL', 'URL for esbuild WebAssembly file',
+            details, 'esbuild.wasm CDN URL', 'URL for esbuild WebAssembly file',
             DEFAULT_ESBUILD_WASM_CDN_URL, 'esbuildWasmCdnUrl'
         );
     }
 
     public load(settings: PluginSettings): void {
-        this.esbuildJsCdnUrlInput?.setValue(settings.esbuildJsCdnUrl);
-        this.esbuildWasmCdnUrlInput?.setValue(settings.esbuildWasmCdnUrl);
+        this.isLoading = true;
+        try {
+            this.esbuildJsCdnUrlInput?.setValue(settings.esbuildJsCdnUrl);
+            this.esbuildWasmCdnUrlInput?.setValue(settings.esbuildWasmCdnUrl);
+        } finally {
+            this.isLoading = false;
+        }
     }
 
     private _createEsbuildUrlSetting(
@@ -45,7 +52,10 @@ export class EsbuildConfigSection extends SettingSection {
             .addText(text => {
                 textComponent = text;
                 text.setPlaceholder(placeholder)
-                    .onChange((value: string) => this._saveGlobalSetting(valueKey, value.trim()));
+                    .onChange(async (value: string) => {
+                        if (this.isLoading) return;
+                        await this._saveGlobalSetting(valueKey, value.trim());
+                    });
             });
         return textComponent!;
     }
