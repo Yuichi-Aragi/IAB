@@ -22,13 +22,13 @@
  */
 
 import { ICommandHandler, CopyDiagnosticsCommand } from '../../types/commands';
-import { InAppBuilderPlugin } from '../InAppBuilderPlugin';
 import { container, ServiceTokens } from '../../utils/DIContainer';
 import { App, Modal } from 'obsidian';
 import { EventBus } from '../../services/EventBus';
 import { Logger } from '../../utils/Logger';
 import { SettingsService } from '../../services/SettingsService';
 import { PluginError } from '../../errors/CustomErrors';
+import { BuildStateService } from '../../services/BuildStateService';
 
 /**
  * The maximum number of characters to display in the fallback modal's textarea
@@ -41,11 +41,11 @@ export class CopyDiagnosticsHandler implements ICommandHandler<CopyDiagnosticsCo
 
     // --- Service Accessors ---
     // Services are resolved once per handle call to ensure the latest instances from the container.
-    private get plugin(): InAppBuilderPlugin { return container.resolve<InAppBuilderPlugin>(ServiceTokens.Plugin); }
-    private get app(): App { return this.plugin.app; }
+    private get app(): App { return container.resolve<App>(ServiceTokens.Plugin).app; }
     private get eventBus(): EventBus { return container.resolve<EventBus>(ServiceTokens.EventBus); }
     private get logger(): Logger { return container.resolve<Logger>(ServiceTokens.Logger); }
     private get settingsService(): SettingsService { return container.resolve<SettingsService>(ServiceTokens.SettingsService); }
+    private get buildStateService(): BuildStateService { return container.resolve<BuildStateService>(ServiceTokens.BuildStateService); }
 
     /**
      * Handles the command to copy diagnostic information for a project.
@@ -71,7 +71,7 @@ export class CopyDiagnosticsHandler implements ICommandHandler<CopyDiagnosticsCo
                 return;
             }
 
-            const diagnosticInfo = this.plugin.getLastBuildDiagnosticInfo(projectId);
+            const diagnosticInfo = this.buildStateService.get(projectId);
 
             if (!diagnosticInfo) {
                 const message = `No diagnostic information available for the last build of "${project.name}". The build may have succeeded or has not been run yet.`;
