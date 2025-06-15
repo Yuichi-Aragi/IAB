@@ -201,6 +201,14 @@ export interface PluginSettings {
      * Users can override the default.
      */
     readonly esbuildWasmCdnUrl: string;
+    /**
+     * If true, enables the real-time analysis view in the sidebar.
+     */
+    readonly realTimeAnalysisEnabled: boolean;
+    /**
+     * The update speed (throttle delay) for rendering logs in the analysis view, in milliseconds.
+     */
+    readonly realTimeAnalysisUpdateSpeed: number;
 }
 
 /**

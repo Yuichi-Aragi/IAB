@@ -17,7 +17,7 @@
  */
 
 import { EsbuildInitializationError } from '../errors/CustomErrors';
-import { ProjectSettings, PluginSettings, BuildInitiator } from './index';
+import { ProjectSettings, PluginSettings, BuildInitiator, LogLevel } from './index';
 
 /** The possible states of the esbuild service, broadcast via `EsbuildStatusChangedEvent`. */
 export type EsbuildStatus = 'initializing' | 'initialized' | 'error' | 'uninitialized';
@@ -101,6 +101,19 @@ export type DiagnosticCopiedEvent = {
     };
 };
 
+/** Published by build pipeline components to provide detailed, real-time logging for the analysis view. */
+export type AnalysisLogEvent = {
+    readonly type: 'ANALYSIS_LOG';
+    readonly payload: {
+        readonly projectId: string;
+        readonly level: LogLevel;
+        readonly timestamp: string;
+        readonly message: string;
+        /** Optional, for structured data like errors, objects, etc. */
+        readonly details?: unknown;
+    };
+};
+
 /**
  * A discriminated union of all possible events that can be published on the EventBus.
  * This is the central type for all reactive state updates in the plugin.
@@ -113,4 +126,5 @@ export type AppEvent =
     | BuildWarningEvent
     | EsbuildStatusChangedEvent
     | SettingsChangedEvent
-    | DiagnosticCopiedEvent;
+    | DiagnosticCopiedEvent
+    | AnalysisLogEvent;
