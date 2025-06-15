@@ -29,6 +29,12 @@ export const ESBUILD_NAMESPACE_PROJECTFILE = 'in-app-builder:projectfile';
 export const ESBUILD_NAMESPACE_EXTERNALDEP = 'in-app-builder:externaldep';
 
 
+// --- View Constants ---
+
+/** The unique type identifier for the Real-time Analysis view. */
+export const ANALYSIS_VIEW_TYPE = 'in-app-builder-analysis-view';
+
+
 // --- Timing and Limits ---
 
 /** Default timeout duration for network requests in milliseconds. */
@@ -51,6 +57,12 @@ export const DEFAULT_GLOBAL_LOG_LEVEL: LogLevel = 'info';
 
 /** Default log level for new projects. */
 export const DEFAULT_PROJECT_LOG_LEVEL: LogLevel = 'info';
+
+/** Default state for the real-time analysis feature. */
+export const DEFAULT_REAL_TIME_ANALYSIS_ENABLED = false;
+
+/** Default update speed for the real-time analysis view in milliseconds. */
+export const DEFAULT_REAL_TIME_ANALYSIS_UPDATE_SPEED = 50;
 
 /**
  * A deeply immutable mapping from `LogLevel` strings to numerical values for comparison.
