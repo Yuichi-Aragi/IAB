@@ -6,6 +6,8 @@ import {
     DEFAULT_GLOBAL_LOG_LEVEL,
     DEFAULT_PROJECT_BUILD_OPTIONS,
     DEFAULT_PROJECT_LOG_LEVEL,
+    DEFAULT_REAL_TIME_ANALYSIS_ENABLED,
+    DEFAULT_REAL_TIME_ANALYSIS_UPDATE_SPEED,
 } from '../constants';
 import { Logger } from '../utils/Logger';
 import { isProjectSettingsValid, getValidationIssuesSummary } from '../utils/ValidationUtils';
@@ -174,6 +176,8 @@ export class SettingsService {
             globalLogLevel: DEFAULT_GLOBAL_LOG_LEVEL,
             esbuildJsCdnUrl: DEFAULT_ESBUILD_JS_CDN_URL,
             esbuildWasmCdnUrl: DEFAULT_ESBUILD_WASM_CDN_URL,
+            realTimeAnalysisEnabled: DEFAULT_REAL_TIME_ANALYSIS_ENABLED,
+            realTimeAnalysisUpdateSpeed: DEFAULT_REAL_TIME_ANALYSIS_UPDATE_SPEED,
         }));
     }
 
@@ -192,6 +196,8 @@ export class SettingsService {
             globalLogLevel: loadedData.globalLogLevel ?? defaults.globalLogLevel,
             esbuildJsCdnUrl: loadedData.esbuildJsCdnUrl ?? defaults.esbuildJsCdnUrl,
             esbuildWasmCdnUrl: loadedData.esbuildWasmCdnUrl ?? defaults.esbuildWasmCdnUrl,
+            realTimeAnalysisEnabled: loadedData.realTimeAnalysisEnabled ?? defaults.realTimeAnalysisEnabled,
+            realTimeAnalysisUpdateSpeed: loadedData.realTimeAnalysisUpdateSpeed ?? defaults.realTimeAnalysisUpdateSpeed,
             projects: loadedData.projects ?? [], // Project validation is handled separately
         };
     }
