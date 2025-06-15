@@ -54,6 +54,7 @@ export const ServiceTokens = {
     EsbuildService: Symbol.for('EsbuildService'),
     ProjectManager: Symbol.for('ProjectManager'),
     BuildService: Symbol.for('BuildService'),
+    BuildStateService: Symbol.for('BuildStateService'), // New token
     EventBus: Symbol.for('EventBus'),
     CommandBus: Symbol.for('CommandBus'),
     Plugin: Symbol.for('Plugin'), // Token for the main plugin instance itself

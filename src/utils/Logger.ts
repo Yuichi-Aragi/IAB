@@ -9,7 +9,7 @@
  */
 
 import { LogLevel } from '../types';
-import { LOG_LEVEL_MAP } from '../constants';
+import { LOG_LEVEL_MAP, DEFAULT_GLOBAL_LOG_LEVEL } from '../constants';
 import { PluginError } from '../errors/CustomErrors';
 
 /** The maximum depth the logger will serialize an object to prevent overly verbose output. */
@@ -22,16 +22,24 @@ const MAX_SERIALIZE_DEPTH = 5;
  * exceptionally safe and will not throw errors.
  */
 export class Logger {
-    private getGlobalLogLevel: () => LogLevel;
+    private logLevelProvider: () => LogLevel;
 
     /**
      * Constructs a new Logger instance.
-     * @param getGlobalLogLevel A function that returns the current global log level setting.
-     *                          This function is called once per log event, allowing for dynamic
-     *                          log level changes. It is called within a try-catch block for safety.
+     * @param defaultProvider A function that returns the initial global log level setting.
+     *                        This is used before the main settings are loaded.
      */
-    constructor(getGlobalLogLevel: () => LogLevel) {
-        this.getGlobalLogLevel = getGlobalLogLevel;
+    constructor(defaultProvider: () => LogLevel) {
+        this.logLevelProvider = defaultProvider;
+    }
+
+    /**
+     * Updates the function used to retrieve the current log level.
+     * This is called by the main plugin after settings have been loaded.
+     * @param provider A function that returns the current `LogLevel`.
+     */
+    public setLogLevelProvider(provider: () => LogLevel): void {
+        this.logLevelProvider = provider;
     }
 
     /**
@@ -48,11 +56,11 @@ export class Logger {
         // Capture the log level setting ONCE at the beginning of the call to prevent race conditions.
         let logLevelSetting: LogLevel;
         try {
-            logLevelSetting = this.getGlobalLogLevel();
+            logLevelSetting = this.logLevelProvider();
         } catch (e) {
-            logLevelSetting = 'info'; // Fallback to a safe default.
+            logLevelSetting = DEFAULT_GLOBAL_LOG_LEVEL; // Fallback to a safe default.
             // Directly use console.error as we cannot trust our own `log` method if its config is failing.
-            console.error('[InAppBuilder] [FATAL] Logger failed to execute getGlobalLogLevel(). Defaulting to "info".', e);
+            console.error('[InAppBuilder] [FATAL] Logger failed to execute logLevelProvider(). Defaulting to "info".', e);
         }
 
         // --- Threshold Check ---
