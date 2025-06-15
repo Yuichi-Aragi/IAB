@@ -85,8 +85,6 @@ This is just the beginning. Here's what I'm hoping to add when I'm not feeling l
 
 *   **Full esbuild Feature Parity:** Expose even more of the esbuild API in the UI.
 *   **`package.json` Integration:** Automatically read dependencies and other build configurations from a `package.json` file in your project folder.
-*   **Better `node_modules` Support:** A more robust system for handling in-vault `node_modules` folders.
-*   **A Dedicated "Builder" View:** Instead of just a settings tab, maybe a proper sidebar pane for managing and building projects.
 *   **Bug Fixes:** So. Many. Bug. Fixes.
 
 ## 💡 Important Notes & Tips
