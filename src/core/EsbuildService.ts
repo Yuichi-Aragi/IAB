@@ -6,14 +6,13 @@
  */
 
 import { App, Notice } from 'obsidian';
-import { EsbuildAPI, PendingInitializeCallback, PluginSettings } from '../types';
+import { EsbuildAPI, PendingInitializeCallback } from '../types';
 import { Logger } from '../utils/Logger';
 import { SettingsService } from '../services/SettingsService';
 import { EsbuildInitializationError, PluginError, createChainedMessage } from '../errors/CustomErrors';
 import { container, ServiceTokens } from '../utils/DIContainer';
 import { EventBus } from '../services/EventBus';
 import { EsbuildStatus } from '../types/events';
-import { InAppBuilderPlugin } from './InAppBuilderPlugin';
 
 // --- New Decomposed Component Imports ---
 import { EsbuildAssetManager } from './esbuild/EsbuildAssetManager';
@@ -26,7 +25,6 @@ interface ExtendedPendingInitializeCallback extends PendingInitializeCallback {
 
 export class EsbuildService {
     private app: App;
-    private plugin: InAppBuilderPlugin;
     private readonly logger: Logger;
     private readonly eventBus: EventBus;
     private get settingsService(): SettingsService { return container.resolve<SettingsService>(ServiceTokens.SettingsService); }
@@ -46,9 +44,8 @@ export class EsbuildService {
     private promiseGeneration: number = 0;
     private masterGeneration: number = 0;
 
-    constructor(app: App, plugin: InAppBuilderPlugin) {
+    constructor(app: App) {
         this.app = app;
-        this.plugin = plugin;
 
         // Cache service instances to prevent resolution errors during unload.
         this.logger = container.resolve<Logger>(ServiceTokens.Logger);
@@ -141,23 +138,9 @@ export class EsbuildService {
 
     private async _performInitialization(generation: number, logPrefix: string, showNotices: boolean): Promise<void> {
         try {
-            if (!this.app.workspace.layoutReady) {
-                this.logger.log('info', `${logPrefix} Obsidian workspace not yet ready. Waiting...`);
-                await new Promise<void>((resolve, reject) => {
-                    const eventRef = this.app.workspace.on('layout-ready', () => {
-                        this.app.workspace.offref(eventRef);
-                        try {
-                            this._checkStaleInitialization(generation, logPrefix, "After layout-ready");
-                            this.logger.log('info', `${logPrefix} Workspace is ready. Proceeding.`);
-                            resolve();
-                        } catch (error) {
-                            reject(error);
-                        }
-                    });
-                    this.plugin.registerEvent(eventRef);
-                });
-            }
-            this._checkStaleInitialization(generation, logPrefix, "After workspace ready check");
+            // The layout-ready check has been removed as it's the responsibility of the caller (InAppBuilderPlugin)
+            // to initiate this service at an appropriate time (e.g., during onload).
+            this._checkStaleInitialization(generation, logPrefix, "Start of initialization");
 
             const settings = this.settingsService.getSettings();
             if (showNotices) new Notice('Acquiring esbuild assets...', 3000);

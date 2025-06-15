@@ -330,7 +330,9 @@ export class ProjectManager {
                     );
                 }
             }
-            throw error;
+            // Do not re-throw error here. The promise to the caller has already been
+            // rejected by the `execute` wrapper. This function's job is to process
+            // the queue, not to propagate errors that are already handled.
         } finally {
             this.activeOperation?.cleanup?.();
             this.activeOperation = null;

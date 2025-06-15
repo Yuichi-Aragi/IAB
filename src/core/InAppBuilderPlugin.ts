@@ -19,7 +19,6 @@ import { NetworkService } from '../services/NetworkService';
 import { FileService } from '../services/FileService';
 import { EsbuildService } from './EsbuildService';
 import { ProjectManager } from './ProjectManager';
-import { BuildService } from './BuildService';
 import { InAppBuilderSettingTab } from '../components/InAppBuilderSettingTab';
 import { PluginError } from '../errors/CustomErrors';
 import { container, ServiceTokens } from '../utils/DIContainer';
@@ -32,6 +31,10 @@ import { RemoveProjectHandler } from './commands/RemoveProjectHandler';
 import { ReinitializeEsbuildHandler } from './commands/ReinitializeEsbuildHandler';
 import { CopyDiagnosticsHandler } from './commands/CopyDiagnosticsHandler';
 import { SaveSettingsHandler } from './commands/SaveSettingsHandler';
+import { AnalysisView } from '../views/AnalysisView';
+import { ANALYSIS_VIEW_TYPE, DEFAULT_GLOBAL_LOG_LEVEL } from '../constants';
+import { BuildService } from './BuildService';
+import { BuildStateService } from '../services/BuildStateService';
 
 type PluginState = 'unloaded' | 'loading' | 'loaded' | 'unloading' | 'failed';
 
@@ -45,11 +48,12 @@ export class InAppBuilderPlugin extends Plugin {
     get settingsService(): SettingsService { return container.resolve<SettingsService>(ServiceTokens.SettingsService); }
     get projectManager(): ProjectManager { return container.resolve<ProjectManager>(ServiceTokens.ProjectManager); }
     get esbuildService(): EsbuildService { return container.resolve<EsbuildService>(ServiceTokens.EsbuildService); }
+    get eventBus(): EventBus { return container.resolve<EventBus>(ServiceTokens.EventBus); }
 
     // --- State Management ---
     private pluginState: PluginState = 'unloaded';
-    private lastBuildDiagnostics: Map<string, string> = new Map();
     private readonly registeredCommandIds: Set<string> = new Set();
+    private analysisViewRibbonIcon: HTMLElement | null = null;
 
     constructor(app: App, manifest: PluginManifest) {
         super(app, manifest);
@@ -74,24 +78,23 @@ export class InAppBuilderPlugin extends Plugin {
             container.reset();
 
             // --- Service Initialization and DI Registration ---
-            const logger = new Logger((): LogLevel => {
-                try {
-                    // Defensively access settings, falling back to 'info' if service isn't ready.
-                    return container.resolve<SettingsService>(ServiceTokens.SettingsService)?.getSettings()?.globalLogLevel || 'info';
-                } catch {
-                    return 'info';
-                }
-            });
+            // 1. Create logger with a safe, default provider. It will be updated after settings load.
+            const logger = new Logger(() => DEFAULT_GLOBAL_LOG_LEVEL);
             container.register(ServiceTokens.Logger, logger);
             container.register(ServiceTokens.Plugin, this);
 
+            // 2. Register event/command buses and other core services.
             const eventBus = new EventBus();
             container.register(ServiceTokens.EventBus, eventBus, { unload: () => eventBus.unload() });
 
             const commandBus = new CommandBus();
             container.register(ServiceTokens.CommandBus, commandBus, { unload: () => commandBus.unload() });
 
-            container.register(ServiceTokens.SettingsService, new SettingsService(this));
+            const settingsService = new SettingsService(this);
+            container.register(ServiceTokens.SettingsService, settingsService);
+
+            const buildStateService = new BuildStateService();
+            container.register(ServiceTokens.BuildStateService, buildStateService, { unload: () => buildStateService.unload() });
 
             const networkService = new NetworkService(this.app);
             container.register(ServiceTokens.NetworkService, networkService, { unload: () => networkService.unload() });
@@ -99,22 +102,36 @@ export class InAppBuilderPlugin extends Plugin {
             const fileService = new FileService(this.app);
             container.register(ServiceTokens.FileService, fileService, { unload: () => fileService.unload() });
 
-            const esbuildService = new EsbuildService(this.app, this);
+            // Services with removed `plugin` dependency
+            const esbuildService = new EsbuildService(this.app);
             container.register(ServiceTokens.EsbuildService, esbuildService, { unload: () => esbuildService.unload() });
 
-            container.register(ServiceTokens.ProjectManager, new ProjectManager());
-            container.register(ServiceTokens.BuildService, new BuildService(this.app, this));
+            const projectManager = new ProjectManager();
+            container.register(ServiceTokens.ProjectManager, projectManager, { unload: () => projectManager.shutdown() });
+
+            container.register(ServiceTokens.BuildService, new BuildService(this.app));
             logger.log('verbose', 'All services initialized and registered in DI container.');
 
             this.registerCommandHandlers();
             logger.log('verbose', 'Command handlers registered with CommandBus.');
 
             // --- Settings and UI Setup ---
-            await this.settingsService.loadSettings();
+            // 3. Load settings from disk.
+            await settingsService.loadSettings();
             logger.log('verbose', 'Plugin settings loaded.');
+
+            // 4. Update logger with the real provider now that settings are loaded.
+            logger.setLogLevelProvider(() => settingsService.getGlobalLogLevel());
+            logger.log('verbose', 'Logger log level provider updated to use settings.');
 
             this.addSettingTab(new InAppBuilderSettingTab(this.app, this));
             logger.log('verbose', 'Settings tab added.');
+
+            // --- Analysis View Setup ---
+            this.registerView(ANALYSIS_VIEW_TYPE, (leaf) => new AnalysisView(leaf, this));
+            this.analysisViewRibbonIcon = this.addRibbonIcon('microscope', 'In-App Builder Analysis', () => this.activateAnalysisView());
+            this._updateAnalysisViewVisibility(settingsService.getSettings());
+            this.eventBus.subscribeComponent(this, 'SETTINGS_CHANGED', (payload) => this._updateAnalysisViewVisibility(payload.newSettings));
 
             // --- Final State Transition and Post-Load Tasks ---
             this.pluginState = 'loaded';
@@ -149,6 +166,9 @@ export class InAppBuilderPlugin extends Plugin {
         console.log(`[InAppBuilder] [INFO] Unloading In-App Builder Plugin v${this.manifest.version} from state: ${previousState}...`);
 
         // --- Resource Cleanup ---
+        // Detach views first to prevent them from trying to access services that are being unloaded.
+        this.app.workspace.detachLeavesOfType(ANALYSIS_VIEW_TYPE);
+
         // The DI container's unload method will orchestrate the graceful shutdown of all
         // registered services (like EsbuildService) in the correct LIFO order.
         try {
@@ -159,8 +179,8 @@ export class InAppBuilderPlugin extends Plugin {
         }
 
         // Clear internal plugin state that is not managed by the DI container.
-        this.lastBuildDiagnostics.clear();
         this.registeredCommandIds.clear(); // Obsidian handles command removal, but we clear our tracker.
+        this.analysisViewRibbonIcon = null;
 
         this.pluginState = 'unloaded';
         // Use console.log for the final message as the logger service is no longer available.
@@ -180,40 +200,6 @@ export class InAppBuilderPlugin extends Plugin {
         commandBus.register(new ReinitializeEsbuildHandler());
         commandBus.register(new CopyDiagnosticsHandler());
         commandBus.register(new SaveSettingsHandler());
-    }
-
-    /**
-     * Stores diagnostic information for a failed build.
-     * @param projectId The ID of the project.
-     * @param diagnosticInfo The detailed diagnostic string.
-     */
-    public setLastBuildDiagnosticInfo(projectId: string, diagnosticInfo: string): void {
-        if (this.pluginState !== 'loaded') return;
-        this.lastBuildDiagnostics.set(projectId, diagnosticInfo);
-        this.logger.log('verbose', `Stored diagnostic info for project ID: ${projectId}`);
-    }
-
-    /**
-     * Retrieves the last stored diagnostic information for a project.
-     * @param projectId The ID of the project.
-     * @returns The diagnostic string, or null if none exists.
-     */
-    public getLastBuildDiagnosticInfo(projectId: string): string | null {
-        if (this.pluginState !== 'loaded') return null;
-        return this.lastBuildDiagnostics.get(projectId) || null;
-    }
-
-    /**
-     * Clears any stored diagnostic information for a project.
-     * Typically called before a new build starts.
-     * @param projectId The ID of the project.
-     */
-    public clearLastBuildDiagnosticInfo(projectId: string): void {
-        if (this.pluginState !== 'loaded') return;
-        if (this.lastBuildDiagnostics.has(projectId)) {
-            this.lastBuildDiagnostics.delete(projectId);
-            this.logger.log('verbose', `Cleared diagnostic info for project ID: ${projectId}`);
-        }
     }
 
     /**
@@ -307,5 +293,33 @@ export class InAppBuilderPlugin extends Plugin {
         }
 
         this.logger.log('info', `Command sync complete. Active commands: ${this.registeredCommandIds.size}. Total projects: ${projects.length}.`);
+    }
+
+    /**
+     * Ensures the analysis view is visible in the right sidebar.
+     */
+    private async activateAnalysisView(): Promise<void> {
+        this.app.workspace.detachLeavesOfType(ANALYSIS_VIEW_TYPE);
+        const leaf = this.app.workspace.getRightLeaf(false);
+        if (leaf) {
+            await leaf.setViewState({
+                type: ANALYSIS_VIEW_TYPE,
+                active: true,
+            });
+            this.app.workspace.revealLeaf(leaf);
+        }
+    }
+
+    /**
+     * Controls the visibility of the analysis view icon and detaches the view if disabled.
+     * @param settings The current plugin settings.
+     */
+    private _updateAnalysisViewVisibility(settings: PluginSettings): void {
+        if (this.analysisViewRibbonIcon) {
+            this.analysisViewRibbonIcon.style.display = settings.realTimeAnalysisEnabled ? '' : 'none';
+        }
+        if (!settings.realTimeAnalysisEnabled) {
+            this.app.workspace.detachLeavesOfType(ANALYSIS_VIEW_TYPE);
+        }
     }
 }
