@@ -21,6 +21,7 @@ export class Compiler {
     }
 
     public async compile(context: BuildContext): Promise<{ outputCode: string, sourceMapContent: string }> {
+        context.logAnalysis('verbose', 'Starting compilation phase.');
         const successfullyReadProjectFileAssets: Record<string, ProjectFileAsset> = {};
         for (const key in context.projectFileAssets) {
             if (!context.projectFileAssets[key].fileReadError) {
@@ -34,6 +35,7 @@ export class Compiler {
         const effectiveEsbuildOptions = this._configureEsbuildOptions(context, effectiveEntryPointKey, [inMemoryPlugin]);
         
         context.updateProgress(65, "Compiling with esbuild...");
+        context.logAnalysis('info', 'Invoking esbuild.build() with configured options.', { options: effectiveEsbuildOptions });
         context.setStatus('compiling');
 
         const buildPromise = esbuildApi.build(effectiveEsbuildOptions);
@@ -46,14 +48,14 @@ export class Compiler {
         context.cancellationToken.throwIfCancelled();
 
         context.updateProgress(90, "Processing esbuild results...");
+        context.logAnalysis('verbose', 'esbuild.build() completed. Processing results.');
         this._handleEsbuildDiagnostics(context, result);
 
         if (!result.outputFiles || result.outputFiles.length === 0) {
             const criticalReadErrors = Object.values(context.projectFileAssets).filter(asset => asset.fileReadError && asset.path === effectiveEntryPointKey);
-            if (criticalReadErrors.length > 0) {
-                 throw new BuildProcessError(`Build produced no output. Entry point '${effectiveEntryPointKey}' could not be read. Error: ${criticalReadErrors[0].fileReadError?.message}`, criticalReadErrors[0].fileReadError, { projectId: context.projectId, entryPointReadFailure: true });
-            }
-            throw new BuildProcessError("Build completed but produced no output files from esbuild.", undefined, { projectId: context.projectId });
+            const err = new BuildProcessError(`Build produced no output. Entry point '${effectiveEntryPointKey}' could not be read. Error: ${criticalReadErrors[0].fileReadError?.message}`, criticalReadErrors[0].fileReadError, { projectId: context.projectId, entryPointReadFailure: true });
+            context.logAnalysis('error', err.message, err);
+            throw err;
         }
 
         return this._extractOutputFromEsbuildResult(context, result);
@@ -68,14 +70,6 @@ export class Compiler {
         return {
             name: 'obsidian-in-memory-resolver-loader',
             setup: (build: EsbuildPluginBuild) => {
-                const logPlugin = (level: 'verbose' | 'info' | 'warn' | 'error', ...msgArgs: unknown[]) => {
-                    const formattedMessage = msgArgs.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg, null, 2)).join(' ');
-                    context.diagnostics.resolutionLogs.push(`[${new Date().toLocaleTimeString()}] [${level.toUpperCase()}] ${formattedMessage}`);
-                    if (LOG_LEVEL_MAP[level] >= LOG_LEVEL_MAP[project.logLevel]) {
-                        this.logger.log(level, `[${project.name}][esbuild-plugin]`, ...msgArgs);
-                    }
-                };
-
                 const resolvePathWithExtensionsAndIndex = (basePath: string): string | null => {
                     const potentialExtensions = ['', ...projectResolveExtensions];
                     if (basePath !== '.' && basePath !== '/') { 
@@ -100,25 +94,25 @@ export class Compiler {
                         const resolvedAssetPath = resolvePathWithExtensionsAndIndex(combinedVirtualPath);
                         if (resolvedAssetPath) {
                             result = { path: resolvedAssetPath, namespace: ESBUILD_NAMESPACE_PROJECTFILE };
-                            logPlugin('verbose', `Resolved relative import '${args.path}' from '${args.importer}' to project file '${resolvedAssetPath}'`);
+                            context.logAnalysis('verbose', `Resolved relative import '${args.path}' to project file '${resolvedAssetPath}'`, { from: args.importer });
                         } else {
                             const errorText = `Could not resolve relative import '${args.path}' from project file '${args.importer}'. Processed path: '${combinedVirtualPath}'.`;
-                            logPlugin('warn', errorText);
+                            context.logAnalysis('warn', errorText, { args });
                             result = { errors: [{ text: errorText } as EsbuildError] };
                         }
                     } else if (args.namespace === ESBUILD_NAMESPACE_EXTERNALDEP) {
                         try {
                             const newFullUrl = new URL(args.path, args.importer).href;
-                            logPlugin('verbose', `Resolved relative import '${args.path}' from CDN importer '${args.importer}' to new URL: '${newFullUrl}'`);
+                            context.logAnalysis('verbose', `Resolved relative import '${args.path}' from CDN importer '${args.importer}' to new URL: '${newFullUrl}'`);
                             result = { path: newFullUrl, namespace: ESBUILD_NAMESPACE_EXTERNALDEP, external: true };
                         } catch (e: unknown) {
                             const errorText = `Error constructing URL for relative CDN import: path='${args.path}', base='${args.importer}'. Error: ${e instanceof Error ? e.message : String(e)}`;
-                            logPlugin('error', errorText);
+                            context.logAnalysis('error', errorText, { args });
                             result = { errors: [{ text: errorText } as EsbuildError] };
                         }
                     } else {
                         const errorText = `Unhandled namespace '${args.namespace}' for relative import '${args.path}' from '${args.importer}'.`;
-                        logPlugin('error', errorText);
+                        context.logAnalysis('error', errorText, { args });
                         result = { errors: [{ text: errorText } as EsbuildError] };
                     }
                     inMemoryPluginResolveCache.set(cacheKey, result);
@@ -139,33 +133,33 @@ export class Compiler {
                     
                     const externalModules = project.buildOptions?.external || DEFAULT_PROJECT_BUILD_OPTIONS.external;
                     if (externalModules.includes(args.path)) { 
-                        logPlugin('verbose', `Resolving '${args.path}' as external (from project settings).`); 
+                        context.logAnalysis('verbose', `Resolving '${args.path}' as external (from project settings).`); 
                         return { path: args.path, external: true }; 
                     }
 
                     if (cdnModuleNameToUrl.hasOwnProperty(args.path)) {
                         const initialUrl = cdnModuleNameToUrl[args.path];
-                        logPlugin('verbose', `Resolving bare import '${args.path}' to initial CDN URL '${initialUrl}'.`);
+                        context.logAnalysis('verbose', `Resolving bare import '${args.path}' to initial CDN URL '${initialUrl}'.`);
                         return { path: initialUrl, namespace: ESBUILD_NAMESPACE_EXTERNALDEP, external: true };
                     }
                     
                     const nodeModulesLookupKey = this._normalizeVirtualPath(VaultPathResolver.join('node_modules', args.path));
                     const resolvedNodeModulePath = resolvePathWithExtensionsAndIndex(nodeModulesLookupKey);
                     if (resolvedNodeModulePath) { 
-                        logPlugin('verbose', `Resolved bare import '${args.path}' to project file (node_modules): ${resolvedNodeModulePath}`); 
+                        context.logAnalysis('verbose', `Resolved bare import '${args.path}' to project file (node_modules): ${resolvedNodeModulePath}`); 
                         return { path: resolvedNodeModulePath, namespace: ESBUILD_NAMESPACE_PROJECTFILE }; 
                     }
                     
-                    logPlugin('verbose', `Bare import '${args.path}' not resolved locally or as CDN. Marking as external.`); 
+                    context.logAnalysis('verbose', `Bare import '${args.path}' not resolved locally or as CDN. Marking as external.`); 
                     return { path: args.path, external: true };
                 });
 
                 build.onLoad({ filter: /.*/, namespace: ESBUILD_NAMESPACE_EXTERNALDEP }, async (args: EsbuildOnLoadArgs): Promise<EsbuildOnLoadResult> => {
                     if (context.externalDependenciesContent.has(args.path)) {
-                        logPlugin('verbose', `Loading cached CDN content for URL: ${args.path}.`);
+                        context.logAnalysis('verbose', `Loading cached CDN content for URL: ${args.path}.`);
                         return { contents: context.externalDependenciesContent.get(args.path), loader: 'js' };
                     }
-                    logPlugin('info', `Fetching uncached dynamic CDN content for URL: ${args.path}`);
+                    context.logAnalysis('info', `Fetching uncached dynamic CDN content for URL: ${args.path}`);
                     try {
                         const response = await this.networkService.requestUrlWithTimeout({ url: args.path, method: 'GET' });
                         if (response.status === 200) {
@@ -185,7 +179,8 @@ export class Compiler {
                         const asset = projectFileAssets[pathKey];
                         const currentHash = await this._calculateFileContentHash(asset.content);
                         if (currentHash !== asset.initialHash) {
-                            const criticalErrorMsg = `CRITICAL: Content hash mismatch for ${pathKey} before esbuild load! Initial: ${asset.initialHash}, Current: ${currentHash}.`; logPlugin('error', criticalErrorMsg);
+                            const criticalErrorMsg = `CRITICAL: Content hash mismatch for ${pathKey} before esbuild load! Initial: ${asset.initialHash}, Current: ${currentHash}.`;
+                            context.logAnalysis('error', criticalErrorMsg, { path: pathKey, initialHash: asset.initialHash, currentHash });
                             return { errors: [{ text: `Internal plugin error: Content integrity check failed for ${pathKey}.` } as EsbuildError] };
                         }
                         
@@ -242,18 +237,21 @@ export class Compiler {
             result.errors.forEach((err, idx) => {
                 this.logger.log('verbose', `[${context.diagnostics.projectName}] Raw esbuild error object ${idx + 1}:`, err);
                 let detailedMessage = `--- Esbuild Error ${idx + 1} ---\nText: ${err.text}\n`;
+                let contextualInfo: any = { rawError: err };
                 if (err.location) {
                     detailedMessage += `File: ${err.location.file}\nLine: ${err.location.line}, Column: ${err.location.column} (0-based)\n`;
                     const fileAsset = context.projectFileAssets[err.location.file]; 
                     if (fileAsset && !fileAsset.fileReadError) {
-                        const { snippetLines, charInfo, hexDump } = getCharacterContext(fileAsset.content, err.location.column, 3, 15);
+                        const charContext = getCharacterContext(fileAsset.content, err.location.column, 3, 15);
                         detailedMessage += `Original File Hash (${context.diagnostics.hashingMethod}): ${fileAsset.initialHash}\n`;
-                        detailedMessage += `Code Snippet (L:${err.location.line}):\n${snippetLines.map(s => "  " + s).join('\n')}\n`;
-                        detailedMessage += `Character Analysis (Col ${err.location.column + 1}): ${charInfo}\n`;
-                        detailedMessage += `UTF-8 Hex Dump:\n${hexDump.split('\n').map(s => "  " + s).join('\n')}\n`;
+                        detailedMessage += `Code Snippet (L:${err.location.line}):\n${charContext.snippetLines.map(s => "  " + s).join('\n')}\n`;
+                        detailedMessage += `Character Analysis (Col ${err.location.column + 1}): ${charContext.charInfo}\n`;
+                        detailedMessage += `UTF-8 Hex Dump:\n${charContext.hexDump.split('\n').map(s => "  " + s).join('\n')}\n`;
+                        contextualInfo.charContext = charContext;
                     }
                 }
                 context.diagnostics.esbuildOutput.errors.push(detailedMessage);
+                context.logAnalysis('error', `Esbuild error: ${err.text}`, contextualInfo);
                 if (idx < 1) errorSummaryForException = `${err.text.substring(0, 100)}... (File: ${err.location?.file || 'N/A'})`;
             });
             throw new BuildProcessError(`Build failed with ${result.errors.length} esbuild error(s). ${errorSummaryForException.trim()}`, undefined, { projectId: context.projectId, esbuildErrors: result.errors });
@@ -268,6 +266,7 @@ export class Compiler {
                 if (warn.location?.lineText) detailedMessage += `  Line Text (L${warn.location.line}): ${warn.location.lineText}\n`;
                 warn.notes?.forEach(note => detailedMessage += `  Note: ${note.text}${note.location ? ` (at ${note.location.file}:${note.location.line})` : ''}\n`);
                 context.diagnostics.esbuildOutput.warnings.push(detailedMessage);
+                context.logAnalysis('warn', `Esbuild warning: ${warn.text}`, { rawWarning: warn });
                 this.esbuildService.eventBus.publish({ type: 'BUILD_WARNING', payload: { projectId: context.projectId, warning: `Build Warning: ${warn.text.substring(0, 150)}...`, initiator: context.initiator } });
             });
         }
@@ -280,6 +279,7 @@ export class Compiler {
         const jsOutput = outputFiles.find(f => f.path === expectedOutfilePath);
         if (!jsOutput) throw new BuildProcessError("No suitable JavaScript output found in esbuild result.", undefined, { projectId: project.id });
         const mapOutput = outputFiles.find(f => f.path === expectedOutfilePath + '.map');
+        context.logAnalysis('verbose', 'Extracted output files from esbuild result.', { jsOutputPath: jsOutput.path, mapOutputPath: mapOutput?.path });
         return { outputCode: jsOutput.text, sourceMapContent: mapOutput ? mapOutput.text : '' };
     }
 

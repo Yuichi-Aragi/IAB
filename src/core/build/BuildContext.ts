@@ -96,4 +96,23 @@ export class BuildContext {
             new Notice(`[${this.diagnostics.projectName}] ${message}`, 2500);
         }
     }
+
+    /**
+     * Publishes a detailed log event for the real-time analysis view.
+     * @param level The severity level of the log.
+     * @param message The primary log message.
+     * @param details Optional structured data for detailed inspection.
+     */
+    public logAnalysis(level: LogLevel, message: string, details?: unknown): void {
+        this.eventBus.publish({
+            type: 'ANALYSIS_LOG',
+            payload: {
+                projectId: this.projectId,
+                level,
+                timestamp: new Date().toISOString(),
+                message,
+                details,
+            }
+        });
+    }
 }

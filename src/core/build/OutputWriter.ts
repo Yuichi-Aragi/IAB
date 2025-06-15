@@ -18,6 +18,7 @@ export class OutputWriter {
 
     public async write(context: BuildContext, code: string, sourceMapContent: string): Promise<string> {
         context.updateProgress(95, "Writing output files to vault...");
+        context.logAnalysis('verbose', 'Starting output writing phase.');
         context.setStatus('writing');
 
         const project = context.diagnostics.projectSettings;
@@ -28,7 +29,11 @@ export class OutputWriter {
         const absVaultProjectPath = VaultPathResolver.join(vaultRootAbs, projectBasePath);
         
         const isContained = project.path === '.' || VaultPathResolver.normalize(absVaultOutputPath).startsWith(VaultPathResolver.normalize(absVaultProjectPath));
-        if (!isContained) throw new BuildProcessError(`Security: Output path "${outputPath}" is outside project directory "${project.path}".`, undefined, { outputPath, projectPath: project.path });
+        if (!isContained) {
+            const err = new BuildProcessError(`Security: Output path "${outputPath}" is outside project directory "${project.path}".`, undefined, { outputPath, projectPath: project.path });
+            context.logAnalysis('error', err.message, err);
+            throw err;
+        }
 
         try {
             let finalCode = code;
@@ -36,14 +41,17 @@ export class OutputWriter {
                 const mapFileNameOnly = VaultPathResolver.getFilename(project.outputFile) + '.map';
                 const sourceMapPath = VaultPathResolver.join(VaultPathResolver.getParent(outputPath), mapFileNameOnly);
                 finalCode = finalCode.replace(/\/\/# sourceMappingURL=.*/g, '').trimEnd() + `\n//# sourceMappingURL=${mapFileNameOnly}\n`;
+                context.logAnalysis('info', `Writing source map to: ${sourceMapPath}`);
                 await this.fileService.writeFile(sourceMapPath, sourceMapContent);
                 this.logger.log('info', `[${project.name}] Wrote source map to: ${sourceMapPath}`);
             }
+            context.logAnalysis('info', `Writing bundled code to: ${outputPath}`);
             await this.fileService.writeFile(outputPath, finalCode);
             this.logger.log('info', `[${project.name}] Wrote bundled code to: ${outputPath}`);
             return outputPath;
         } catch (error: unknown) {
             const writeError = error instanceof PluginError ? error : new FileSystemError(createChainedMessage(`Error writing output for "${project.name}".`, error), error instanceof Error ? error : undefined);
+            context.logAnalysis('error', `Failed to write output files for "${project.name}".`, writeError);
             throw new BuildProcessError(createChainedMessage(`Failed to write output files for "${project.name}".`, writeError), writeError);
         }
     }

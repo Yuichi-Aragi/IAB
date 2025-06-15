@@ -30,23 +30,39 @@ export class ProjectAssetCollector {
 
     public async collect(context: BuildContext): Promise<void> {
         context.updateProgress(5, "Validating project structure...");
+        context.logAnalysis('verbose', 'Starting asset collection: Validating project structure.');
         const project = context.diagnostics.projectSettings;
         this._validateProjectPathsOrThrow(project);
 
         const projectBasePath = project.path === '.' ? '' : VaultPathResolver.normalize(project.path);
         const projectPathForFileService = project.path === '.' ? this.fileService.getVaultRoot().path : VaultPathResolver.normalize(project.path);
 
-        if (!(await this.fileService.exists(projectPathForFileService))) throw new FileSystemError(`Project path '${project.path}' (resolved: '${projectPathForFileService}') does not exist.`, undefined, { path: projectPathForFileService });
+        if (!(await this.fileService.exists(projectPathForFileService))) {
+            const err = new FileSystemError(`Project path '${project.path}' (resolved: '${projectPathForFileService}') does not exist.`, undefined, { path: projectPathForFileService });
+            context.logAnalysis('error', err.message, err);
+            throw err;
+        }
+        context.logAnalysis('verbose', `Project path '${projectPathForFileService}' exists.`);
+
         if (project.path !== '.') {
             const projectFolder = this.fileService.getAbstractFileByPath(projectPathForFileService);
-            if (!(projectFolder instanceof TFolder)) throw new FileSystemError(`Project path '${project.path}' (resolved: '${projectPathForFileService}') is not a folder.`, undefined, { path: projectPathForFileService });
+            if (!(projectFolder instanceof TFolder)) {
+                const err = new FileSystemError(`Project path '${project.path}' (resolved: '${projectPathForFileService}') is not a folder.`, undefined, { path: projectPathForFileService });
+                context.logAnalysis('error', err.message, err);
+                throw err;
+            }
         }
         context.cancellationToken.throwIfCancelled();
 
         context.updateProgress(10, "Locating entry point...");
         const entryPointFullPath = VaultPathResolver.join(projectBasePath, project.entryPoint);
         const entryFile = this.fileService.getAbstractFileByPath(entryPointFullPath);
-        if (!(entryFile instanceof TFile)) throw new FileSystemError(`Entry point '${project.entryPoint}' not found at '${entryPointFullPath}'.`, undefined, { path: entryPointFullPath });
+        if (!(entryFile instanceof TFile)) {
+            const err = new FileSystemError(`Entry point '${project.entryPoint}' not found at '${entryPointFullPath}'.`, undefined, { path: entryPointFullPath });
+            context.logAnalysis('error', err.message, err);
+            throw err;
+        }
+        context.logAnalysis('verbose', `Entry point found at '${entryPointFullPath}'.`);
 
         const filesToRead = await this._scanProjectFiles(context);
         context.cancellationToken.throwIfCancelled();
@@ -56,10 +72,13 @@ export class ProjectAssetCollector {
         const effectiveEntryPointKey = this._normalizeVirtualPath(project.entryPoint);
         if (!context.projectFileAssets[effectiveEntryPointKey] || context.projectFileAssets[effectiveEntryPointKey].fileReadError) {
             const entryAsset = context.projectFileAssets[effectiveEntryPointKey];
-            if (entryAsset && entryAsset.fileReadError) throw new BuildProcessError(createChainedMessage(`CRITICAL: Entry point '${effectiveEntryPointKey}' (Path: ${entryPointFullPath}) could not be read.`, entryAsset.fileReadError), entryAsset.fileReadError, { path: entryPointFullPath, critical: true });
-            else throw new BuildProcessError(`CRITICAL: Entry point content for '${effectiveEntryPointKey}' (Path: ${entryPointFullPath}) was not loaded.`, undefined, { path: entryPointFullPath, critical: true });
+            const baseError = entryAsset?.fileReadError ?? new BuildProcessError(`CRITICAL: Entry point content for '${effectiveEntryPointKey}' (Path: ${entryPointFullPath}) was not loaded.`);
+            const err = new BuildProcessError(createChainedMessage(`CRITICAL: Entry point '${effectiveEntryPointKey}' (Path: ${entryPointFullPath}) could not be read.`, baseError), baseError, { path: entryPointFullPath, critical: true });
+            context.logAnalysis('error', err.message, err);
+            throw err;
         }
         this.logger.log('verbose', `[${project.name}] Collected and processed ${Object.keys(context.projectFileAssets).length} project files.`);
+        context.logAnalysis('info', `Asset collection complete. Found ${Object.keys(context.projectFileAssets).length} relevant project files.`);
     }
 
     private _validateProjectPathsOrThrow(project: ProjectSettings): void {
@@ -70,6 +89,7 @@ export class ProjectAssetCollector {
 
     private async _scanProjectFiles(context: BuildContext): Promise<{ file: TFile, virtualPath: string }[]> {
         context.updateProgress(15, "Scanning project files...");
+        context.logAnalysis('verbose', 'Starting project file scan.');
         const project = context.diagnostics.projectSettings;
         const projectPathForFileService = project.path === '.' ? this.fileService.getVaultRoot().path : VaultPathResolver.normalize(project.path);
         const relevantExtensions = project.buildOptions?.resolveExtensions || DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
@@ -90,7 +110,10 @@ export class ProjectAssetCollector {
             if (!(abstractCurrent instanceof TFolder)) continue;
             visitedFolders.add(normalizedCurrentPathInVault);
             scannedCount++;
-            if (scannedCount % 10 === 0) context.updateProgress(15 + Math.min(20, Math.floor(scannedCount / 20)), `Scanning directories (${scannedCount} scanned)`);
+            if (scannedCount % 10 === 0) {
+                context.updateProgress(15 + Math.min(20, Math.floor(scannedCount / 20)), `Scanning directories (${scannedCount} scanned)`);
+                context.logAnalysis('verbose', `Scanning directory: ${normalizedCurrentPathInVault}`);
+            }
 
             for (const child of abstractCurrent.children) {
                 const childRelativePath = this._normalizeVirtualPath(VaultPathResolver.join(currentItem.relativeToProjectRoot, child.name));
@@ -107,15 +130,19 @@ export class ProjectAssetCollector {
                     
                     if (!isStandardExclusion && !isNodeModuleSubExclusion && !isOtherDotFolder) {
                         queue.push({ pathInVault: child.path, relativeToProjectRoot: childRelativePath, isInNodeModules: currentItem.isInNodeModules || child.name === 'node_modules' });
+                    } else {
+                        context.logAnalysis('verbose', `Excluding directory from scan: ${child.path}`);
                     }
                 }
             }
         }
+        context.logAnalysis('verbose', `File scan complete. Found ${filesToRead.length} potentially relevant files.`);
         return filesToRead;
     }
 
     private async _readFilesToContext(context: BuildContext, filesToRead: { file: TFile, virtualPath: string }[]): Promise<void> {
         context.updateProgress(35, "Reading project files content...");
+        context.logAnalysis('verbose', `Reading content for ${filesToRead.length} files.`);
         let totalSize = 0;
         for (let i = 0; i < filesToRead.length; i++) {
             context.cancellationToken.throwIfCancelled();
@@ -126,19 +153,35 @@ export class ProjectAssetCollector {
                 const content = await this.fileService.readFile(item.file.path);
                 totalSize += content.length;
                 if (totalSize > this.MAX_TOTAL_PROJECT_SIZE_BYTES) {
-                    throw new BuildProcessError(`Project source size exceeds the maximum limit of ${this.MAX_TOTAL_PROJECT_SIZE_BYTES / 1024 / 1024} MB.`, undefined, { totalSize, limit: this.MAX_TOTAL_PROJECT_SIZE_BYTES });
+                    const err = new BuildProcessError(`Project source size exceeds the maximum limit of ${this.MAX_TOTAL_PROJECT_SIZE_BYTES / 1024 / 1024} MB.`, undefined, { totalSize, limit: this.MAX_TOTAL_PROJECT_SIZE_BYTES });
+                    context.logAnalysis('error', err.message, err);
+                    throw err;
                 }
-                if (content.length > MAX_SOURCE_FILE_SIZE_BYTES) this.logger.log('warn', `[${context.diagnostics.projectName}] Large source file: ${item.file.path}, Size: ${content.length} bytes.`);
+                if (content.length > MAX_SOURCE_FILE_SIZE_BYTES) {
+                    const msg = `Large source file detected: ${item.file.path}`;
+                    context.logAnalysis('warn', msg, { size: content.length, limit: MAX_SOURCE_FILE_SIZE_BYTES });
+                    this.logger.log('warn', `[${context.diagnostics.projectName}] ${msg}, Size: ${content.length} bytes.`);
+                }
                 const problematicChars = detectProblematicCharacters(content);
-                if (problematicChars.length > 0) this.logger.log('warn', `[${context.diagnostics.projectName}] File '${item.file.path}' contains problematic Unicode characters:`, problematicChars.map(pc => `${pc.name} (U+${pc.code.toString(16)}) at index ${pc.index}`).join(', '));
+                if (problematicChars.length > 0) {
+                    const msg = `File '${item.file.path}' contains problematic Unicode characters.`;
+                    const details = problematicChars.map(pc => `${pc.name} (U+${pc.code.toString(16)}) at index ${pc.index}`).join(', ');
+                    context.logAnalysis('warn', msg, { details, problematicChars });
+                    this.logger.log('warn', `[${context.diagnostics.projectName}] ${msg}: ${details}`);
+                }
                 const hash = await this._calculateFileContentHash(content, item.file.path);
                 context.projectFileAssets[virtualPathKey] = { content, initialHash: hash, path: virtualPathKey };
-                this.logger.log('verbose', `[${context.diagnostics.projectName}] Read file: ${item.file.path} (Virtual: ${virtualPathKey}), Size: ${content.length} bytes, Hash (${this.isUsingHashFallback ? 'FNV-1a' : 'SHA-256'}): ${hash}`);
+                context.logAnalysis('verbose', `Read file: ${item.file.path}`, { virtualPath: virtualPathKey, size: content.length, hash });
             } catch (readError: unknown) {
                 const fileReadError = readError instanceof PluginError ? readError : new FileSystemError(createChainedMessage(`Failed to read project file: ${item.file.path}`, readError), readError instanceof Error ? readError : undefined, { path: item.file.path });
                 context.projectFileAssets[virtualPathKey] = { content: '', initialHash: '', path: virtualPathKey, fileReadError };
+                context.logAnalysis('error', `Failed to read file '${item.file.path}' (Virtual: ${virtualPathKey}).`, fileReadError);
                 this.logger.log('error', `[${context.diagnostics.projectName}] Failed to read file '${item.file.path}' (Virtual: ${virtualPathKey}). Error:`, fileReadError.message);
-                if (virtualPathKey === this._normalizeVirtualPath(context.diagnostics.projectSettings.entryPoint)) throw new BuildProcessError(createChainedMessage(`CRITICAL: Failed to read entry point file: ${item.file.path}.`, fileReadError), fileReadError, { criticalFile: virtualPathKey });
+                if (virtualPathKey === this._normalizeVirtualPath(context.diagnostics.projectSettings.entryPoint)) {
+                    const err = new BuildProcessError(createChainedMessage(`CRITICAL: Failed to read entry point file: ${item.file.path}.`, fileReadError), fileReadError, { criticalFile: virtualPathKey });
+                    context.logAnalysis('error', err.message, err);
+                    throw err;
+                }
             }
             if (filesToRead.length > 0) context.updateProgress(35 + Math.round(((i + 1) / filesToRead.length) * 20), `Reading files (${i + 1}/${filesToRead.length})`);
         }
