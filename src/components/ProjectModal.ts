@@ -141,9 +141,10 @@ export class ProjectModal extends Modal {
      */
     private _updateFeedback(feedbackEl: HTMLElement | undefined, isValid: boolean, message?: string): void {
         if (!feedbackEl) return;
-        feedbackEl.setText(message || '');
+        // For valid states, don't show text to reduce noise. The icon is enough.
+        feedbackEl.setText(isValid ? '' : message || '');
         feedbackEl.toggleClass('setting-item-feedback-error', !isValid && !!message);
-        feedbackEl.toggleClass('setting-item-feedback-valid', isValid && !!message);
+        feedbackEl.toggleClass('setting-item-feedback-valid', isValid);
     }
 
     /** Renders the core project configuration settings (name, paths). */
@@ -154,7 +155,7 @@ export class ProjectModal extends Modal {
             const trimmed = value.trim();
             if (!trimmed) return { valid: false, message: 'Project name is required.' };
             if (trimmed.length > 100) return {valid: false, message: 'Project name is too long (max 100 chars).'};
-            return { valid: true, normalizedValue: trimmed, message: '✓ Valid' };
+            return { valid: true, normalizedValue: trimmed };
         });
 
         this._createValidatedTextSetting(contentEl, 'Project path (folder)', 'Path to project\'s root folder. Use "." for vault root.', 'Path/To/PluginFolder or .', 'path', value => {
@@ -178,7 +179,7 @@ export class ProjectModal extends Modal {
             if (!isValidVaultPath(processedValue)) {
                 return { valid: false, message: 'Invalid vault path. Check for ".." or invalid characters.', normalizedValue: processedValue };
             }
-            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
+            return { valid: true, normalizedValue: processedValue };
         });
 
         this._createValidatedTextSetting(contentEl, 'Entry point file', 'Main TS/JS file, relative to project path. Required.', 'main.ts or src/index.js', 'entryPoint', value => {
@@ -194,7 +195,7 @@ export class ProjectModal extends Modal {
             if (!isValidRelativeFilePath(processedValue)) {
                 return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
             }
-            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
+            return { valid: true, normalizedValue: processedValue };
         });
 
         this._createValidatedTextSetting(contentEl, 'Output file path', 'Bundled JS file path, relative to project path. Required.', 'main.js or dist/bundle.js', 'outputFile', value => {
@@ -210,7 +211,7 @@ export class ProjectModal extends Modal {
             if (!isValidRelativeFilePath(processedValue)) {
                 return { valid: false, message: 'Invalid relative file path. Cannot use ".." or start/end with "/".', normalizedValue: processedValue };
             }
-            return { valid: true, normalizedValue: processedValue, message: '✓ Valid' };
+            return { valid: true, normalizedValue: processedValue };
         });
     }
 
@@ -256,7 +257,7 @@ export class ProjectModal extends Modal {
         const trimmedValue = jsonString.trim();
         if (!trimmedValue) {
             (this.project.buildOptions as any)[valueKey] = undefined; // Use undefined to clear
-            this._updateFeedback(feedbackEl, true, 'Optional. Cleared if empty.');
+            this._updateFeedback(feedbackEl, true);
             inputEl.removeClass('in-app-builder-input-error');
             return true;
         }
@@ -297,7 +298,7 @@ export class ProjectModal extends Modal {
             }
 
             (this.project.buildOptions as any)[valueKey] = parsed;
-            this._updateFeedback(feedbackEl, true, '✓ Valid JSON');
+            this._updateFeedback(feedbackEl, true);
             inputEl.removeClass('in-app-builder-input-error');
             return true;
 
@@ -363,7 +364,6 @@ export class ProjectModal extends Modal {
                 let message = '';
                 if (!trimmed) {
                     bo.target = DEFAULT_PROJECT_BUILD_OPTIONS.target;
-                    message = 'Using default target.';
                 } else {
                     const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
                     if (parts.some(p => !/^[a-z0-9.-]+$/i.test(p))) {
@@ -372,7 +372,6 @@ export class ProjectModal extends Modal {
                         bo.target = DEFAULT_PROJECT_BUILD_OPTIONS.target;
                     } else {
                         bo.target = parts.length > 1 ? parts : parts[0];
-                        message = '✓ Valid';
                     }
                 }
                 this._updateFeedback(targetFeedbackEl, isValid, message);
@@ -406,7 +405,6 @@ export class ProjectModal extends Modal {
                 let message = '';
                 if (!trimmed) {
                     bo.resolveExtensions = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
-                    message = 'Using default extensions.';
                 } else {
                     const parts = trimmed.split(',').map(s => s.trim()).filter(s => s);
                     if (parts.some(p => !p.startsWith('.') || p.length < 2)) {
@@ -415,7 +413,6 @@ export class ProjectModal extends Modal {
                         bo.resolveExtensions = DEFAULT_PROJECT_BUILD_OPTIONS.resolveExtensions;
                     } else {
                         bo.resolveExtensions = parts;
-                        message = '✓ Valid';
                     }
                 }
                  this._updateFeedback(resolveExtFeedbackEl, isValid, message);
@@ -437,7 +434,6 @@ export class ProjectModal extends Modal {
                  let message = '';
                 if (!trimmed) {
                     bo.external = DEFAULT_PROJECT_BUILD_OPTIONS.external;
-                    message = 'Using default external modules.';
                 } else {
                     const parts = trimmed.split(',').map(s => s.trim());
                     if (parts.some(p => !p || !/^[a-z0-9@_./-]+$/i.test(p))) {
@@ -446,7 +442,6 @@ export class ProjectModal extends Modal {
                         bo.external = DEFAULT_PROJECT_BUILD_OPTIONS.external;
                     } else {
                         bo.external = parts.filter(p => p);
-                        message = '✓ Valid';
                     }
                 }
                 this._updateFeedback(externalFeedbackEl, isValid, message);
@@ -488,7 +483,7 @@ export class ProjectModal extends Modal {
 
                     if (dep.name || dep.url) { // Only validate if at least one field is filled
                         if (validation.valid) {
-                            message = '✓ Valid';
+                            isValid = true;
                         } else {
                             isValid = false;
                             message = validation.error || "Both name and URL are required and must be valid.";

@@ -13,6 +13,7 @@ import { EsbuildStatusSection } from './settings/sections/EsbuildStatusSection';
 import { EsbuildConfigSection } from './settings/sections/EsbuildConfigSection';
 import { ProjectsSection } from './settings/sections/ProjectsSection';
 import { SettingSection } from './settings/SettingSection';
+import { AnalysisSettingsSection } from './settings/sections/AnalysisSettingsSection';
 
 type SettingTabState = 'uninitialized' | 'rendering' | 'active' | 'hiding' | 'hidden' | 'destroyed';
 
@@ -32,6 +33,7 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
         // Instantiate all the UI sections
         this.sections = [
             new GlobalSettingsSection(app, plugin),
+            new AnalysisSettingsSection(app, plugin),
             new EsbuildStatusSection(app, plugin),
             new EsbuildConfigSection(app, plugin),
             new ProjectsSection(app, plugin),
