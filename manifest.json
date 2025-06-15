@@ -1,7 +1,7 @@
 {
 	"id": "in-app-builder",
 	"name": "In-App Builder",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"minAppVersion": "1.14.0",
 	"description": "Build and bundle your plugins right inside vault, no external tools needed!",
 	"author": "Yuichi-Aragi",
