@@ -13,15 +13,6 @@ import { LogLevel, BuildOptions } from '../types';
 
 // --- Service & API Constants ---
 
-/** Default CDN URL for the esbuild browser JavaScript file. */
-export const DEFAULT_ESBUILD_JS_CDN_URL = "https://cdn.jsdelivr.net/npm/esbuild-wasm@latest/lib/browser.min.js";
-
-/** Default CDN URL for the esbuild WebAssembly file. */
-export const DEFAULT_ESBUILD_WASM_CDN_URL = "https://cdn.jsdelivr.net/npm/esbuild-wasm@latest/esbuild.wasm";
-
-/** HTML element ID for the dynamically injected esbuild script tag. */
-export const INJECTED_ESBUILD_SCRIPT_ID = 'in-app-builder-injected-esbuild-script';
-
 /** Custom esbuild namespace for files originating from the Obsidian vault project. */
 export const ESBUILD_NAMESPACE_PROJECTFILE = 'in-app-builder:projectfile';
 
