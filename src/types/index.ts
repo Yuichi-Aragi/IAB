@@ -192,16 +192,6 @@ export interface PluginSettings {
      */
     readonly globalLogLevel: LogLevel;
     /**
-     * The CDN URL for the main esbuild JavaScript file (e.g., `browser.min.js`).
-     * Users can override the default.
-     */
-    readonly esbuildJsCdnUrl: string;
-    /**
-     * The CDN URL for the esbuild WebAssembly file (`esbuild.wasm`).
-     * Users can override the default.
-     */
-    readonly esbuildWasmCdnUrl: string;
-    /**
      * If true, enables the real-time analysis view in the sidebar.
      */
     readonly realTimeAnalysisEnabled: boolean;
