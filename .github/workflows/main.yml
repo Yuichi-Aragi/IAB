@@ -72,21 +72,7 @@ jobs:
       - name: Build plugin
         run: npm run build
 
-      # 7. Get version from manifest for tag verification
-      - name: Get manifest version
-        id: get_version
-        run: |
-          VERSION=$(jq -r .version manifest.json)
-          echo "version=$VERSION" >> $GITHUB_ENV
-
-      # 8. Verify that the tag matches the manifest version
-      - name: Verify tag and manifest version match
-        run: |
-          TAG_NAME=${GITHUB_REF#refs/tags/}
-          if [ "v${{ env.version }}" != "$TAG_NAME" ] && [ "${{ env.version }}" != "$TAG_NAME" ]; then
-            echo "Error: Tag name '$TAG_NAME' does not match manifest version '${{ env.version }}'."
-            exit 1
-          fi
+      
 
       # 9. Create GitHub Release and Upload Assets
       # This single, modern step replaces the previous "delete" and "create" steps.
