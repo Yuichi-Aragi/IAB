@@ -79,6 +79,8 @@ You have two ways to kick off a build:
 
 If the build is successful, the `main.js` (and a `main.js.map` if you enabled sourcemaps) will appear in your project's folder! You can then add a `manifest.json` and start testing your plugin in Obsidian.
 
+This Plugin Works completely offline without needing an internet connection, unless you have set external deps via cdns.
+
 ## 🛣️ The Road Ahead (Future Plans)
 
 This is just the beginning. Here's what I'm hoping to add when I'm not feeling lazy:
@@ -86,13 +88,6 @@ This is just the beginning. Here's what I'm hoping to add when I'm not feeling l
 *   **Full esbuild Feature Parity:** Expose even more of the esbuild API in the UI.
 *   **`package.json` Integration:** Automatically read dependencies and other build configurations from a `package.json` file in your project folder.
 *   **Bug Fixes:** So. Many. Bug. Fixes.
-
-## 💡 Important Notes & Tips
-
-### 🌐 Internet Connection
-This plugin needs an internet connection *every* time you run it after loading Obsidian. It has to download the `esbuild` library from a CDN, which is about **15 MB** approximately.
-
-You'll know it's done when you see a success notice or the status in the settings tab says "Initialized ✓". After that, you can safely turn off your internet if you want... and hope it works, I guess.
 
 ### 📱 Mobile Development & Debugging
 Developing on mobile is tough without access to the developer console. If you're trying to debug your plugin on a phone or tablet, you're going to need a way to see `console.log` messages and errors.
