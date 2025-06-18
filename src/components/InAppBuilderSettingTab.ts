@@ -10,7 +10,6 @@ import { container, ServiceTokens } from '../utils/DIContainer';
 import { SettingsService } from '../services/SettingsService';
 import { GlobalSettingsSection } from './settings/sections/GlobalSettingsSection';
 import { EsbuildStatusSection } from './settings/sections/EsbuildStatusSection';
-import { EsbuildConfigSection } from './settings/sections/EsbuildConfigSection';
 import { ProjectsSection } from './settings/sections/ProjectsSection';
 import { SettingSection } from './settings/SettingSection';
 import { AnalysisSettingsSection } from './settings/sections/AnalysisSettingsSection';
@@ -35,7 +34,6 @@ export class InAppBuilderSettingTab extends PluginSettingTab {
             new GlobalSettingsSection(app, plugin),
             new AnalysisSettingsSection(app, plugin),
             new EsbuildStatusSection(app, plugin),
-            new EsbuildConfigSection(app, plugin),
             new ProjectsSection(app, plugin),
         ];
     }
