@@ -1,8 +1,6 @@
 import { Plugin, Notice } from 'obsidian';
 import { PluginSettings, LogLevel, ProjectSettings } from '../types';
 import {
-    DEFAULT_ESBUILD_JS_CDN_URL,
-    DEFAULT_ESBUILD_WASM_CDN_URL,
     DEFAULT_GLOBAL_LOG_LEVEL,
     DEFAULT_PROJECT_BUILD_OPTIONS,
     DEFAULT_PROJECT_LOG_LEVEL,
@@ -174,8 +172,6 @@ export class SettingsService {
         return JSON.parse(JSON.stringify({
             projects: [],
             globalLogLevel: DEFAULT_GLOBAL_LOG_LEVEL,
-            esbuildJsCdnUrl: DEFAULT_ESBUILD_JS_CDN_URL,
-            esbuildWasmCdnUrl: DEFAULT_ESBUILD_WASM_CDN_URL,
             realTimeAnalysisEnabled: DEFAULT_REAL_TIME_ANALYSIS_ENABLED,
             realTimeAnalysisUpdateSpeed: DEFAULT_REAL_TIME_ANALYSIS_UPDATE_SPEED,
         }));
@@ -194,8 +190,6 @@ export class SettingsService {
         return {
             ...defaults,
             globalLogLevel: loadedData.globalLogLevel ?? defaults.globalLogLevel,
-            esbuildJsCdnUrl: loadedData.esbuildJsCdnUrl ?? defaults.esbuildJsCdnUrl,
-            esbuildWasmCdnUrl: loadedData.esbuildWasmCdnUrl ?? defaults.esbuildWasmCdnUrl,
             realTimeAnalysisEnabled: loadedData.realTimeAnalysisEnabled ?? defaults.realTimeAnalysisEnabled,
             realTimeAnalysisUpdateSpeed: loadedData.realTimeAnalysisUpdateSpeed ?? defaults.realTimeAnalysisUpdateSpeed,
             projects: loadedData.projects ?? [], // Project validation is handled separately
