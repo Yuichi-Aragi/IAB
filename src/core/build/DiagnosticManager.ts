@@ -31,8 +31,6 @@ export class DiagnosticManager {
             projectSettings: JSON.parse(JSON.stringify(project)),
             globalSettings: {
                 globalLogLevel: globalSettings.globalLogLevel,
-                esbuildJsCdnUrl: globalSettings.esbuildJsCdnUrl,
-                esbuildWasmCdnUrl: globalSettings.esbuildWasmCdnUrl,
             },
             hashingMethod: isUsingHashFallback ? 'FNV-1a (fallback)' : 'SHA-256',
             projectFileAssets: {},
